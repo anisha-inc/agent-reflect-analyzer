@@ -30,7 +30,7 @@ tag commit and a clean-shell smoke run passing.
 - [x] Step 6: scrub-test pre-commit + forbidden-patterns + source cleanup pass
 - [x] Step 7: pytest-socket + STYLE.md + renovate.json
 - [x] Step 8: Reusable workflow + vendored github-app-token (sync-drift workflow → Follow-ups)
-- [ ] Step 9: Slim CI (py-tests + ruff + scrub-test + subprocess-guard)
+- [x] Step 9: Slim CI (py-tests + ruff + scrub-test + subprocess-guard)
 - [ ] Step 10: Lift release workflow AS-IS
 - [ ] Step 11: LICENSE (MIT) + README
 - [ ] Step 12: Final verification + initial-release PR + tag `v1.0.0`
@@ -76,9 +76,9 @@ tag commit and a clean-shell smoke run passing.
 
 ## Next Action
 
-Step 9 — `.github/workflows/ci.yml`: jobs py-tests (uv sync --frozen --extra
-dev + pytest --cov), ruff, subprocess-guard (grep), scrub-test (base..HEAD),
-and an `if: always()` status gate over all four. Pin actions by SHA.
+Step 10 — lift `.github/workflows/release.yml` from the internal source AS-IS
+(generic `$GITHUB_REPOSITORY` refs); actionlint it. Then Step 11 (LICENSE +
+README, bump version to 1.0.0) and Step 12 (verify + PR + tag).
 
 ## Follow-ups
 
