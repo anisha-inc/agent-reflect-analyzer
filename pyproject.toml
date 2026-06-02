@@ -39,9 +39,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["analyzer"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"analyzer/llm/prompts" = "analyzer/llm/prompts"
-
 [tool.ruff]
 line-length = 100
 

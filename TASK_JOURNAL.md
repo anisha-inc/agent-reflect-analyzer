@@ -72,13 +72,20 @@ tag commit and a clean-shell smoke run passing.
   naive body-diff sync would fight the scrub — hence sync-vendored is deferred
   and needs a scrub-aware transform (see Follow-ups).
 
+- Removed the `[tool.hatch.build.targets.wheel.force-include]` table entirely:
+  `analyzer/llm/prompts` is inside the package, so hatchling already bundles it
+  and the force-include caused a double-include build failure (`uv build`). The
+  wheel now bundles all `.j2` prompts + the issue template via default package
+  data. Verified `uv build` + `unzip -l` (33 files, templates present).
+
 ## Dead Ends
 
 ## Next Action
 
-Step 11 — LICENSE (MIT, Anisha Inc., 2026) + README (per plan template), and
-bump `pyproject` version + `analyzer.__version__` to 1.0.0. Then Step 12:
-actionlint all workflows + uv build wheel check + /pr + (CONFIRM) tag v1.0.0.
+Step 12 — local verification DONE (ruff, scrub smoke + full diff, actionlint ×3,
+uv build + wheel-bundles-templates, socket-locked test subset). Next: open the
+initial-release PR (seed → main), wait for CI green, then — only after explicit
+confirmation — squash-merge + manual `git tag -a v1.0.0` + `gh release create`.
 
 ## Follow-ups
 
