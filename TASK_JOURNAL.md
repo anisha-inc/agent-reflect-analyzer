@@ -78,6 +78,13 @@ tag commit and a clean-shell smoke run passing.
   wheel now bundles all `.j2` prompts + the issue template via default package
   data. Verified `uv build` + `unzip -l` (33 files, templates present).
 
+- CI fix-ci #1: the 7 `test_redact` failures were presidio's `AnalyzerEngine()`
+  requiring a spaCy model (absent in CI → fail-open → nothing redacted), and its
+  `EmailRecognizer` fetching the public-suffix list via tldextract (blocked by
+  `--disable-socket`). Fix: run pure-regex recognizers directly (no
+  `AnalyzerEngine`) + a self-contained `EMAIL_ADDRESS` regex. Fully offline;
+  verified all 8 `test_redact` pass under socket lockdown with presidio installed.
+
 ## Dead Ends
 
 ## Next Action

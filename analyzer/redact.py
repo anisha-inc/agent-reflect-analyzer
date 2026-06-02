@@ -40,33 +40,44 @@ def _custom_recognizers():
             supported_entity="JWT",
             patterns=[Pattern("jwt", r"eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", 0.9)],
         ),
+        # Self-contained email regex — we deliberately do NOT use presidio's
+        # EmailRecognizer, which validates the TLD via tldextract (an HTTP fetch
+        # of the public-suffix list that the no-network test lockdown blocks).
+        PatternRecognizer(
+            supported_entity="EMAIL_ADDRESS",
+            patterns=[Pattern("email", r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", 0.9)],
+        ),
     ]
-
-
-_ENTITIES = ["ANTHROPIC_KEY", "GH_PAT", "AWS_KEY", "GCS_HMAC", "JWT", "EMAIL_ADDRESS"]
 
 
 @functools.lru_cache(maxsize=1)
 def _engine() -> tuple[Any, Any]:
-    """Build (analyzer, anonymizer) once."""
-    from presidio_analyzer import AnalyzerEngine
+    """Build (recognizers, anonymizer) once.
+
+    We run the recognizers directly rather than via AnalyzerEngine: every entity
+    we care about is matched by a pure-regex recognizer, none of which need NLP
+    artifacts or network. This avoids requiring a spaCy model at runtime —
+    AnalyzerEngine() would otherwise try to load `en_core_web_lg` and fail where
+    no model is installed (e.g. CI).
+    """
     from presidio_anonymizer import AnonymizerEngine
 
-    analyzer = AnalyzerEngine()
-    for r in _custom_recognizers():
-        analyzer.registry.add_recognizer(r)
-    return analyzer, AnonymizerEngine()
+    return _custom_recognizers(), AnonymizerEngine()
 
 
 def redact_string(text: str, *, record: audit.RunRecord | None = None) -> str:
     if not text:
         return text
     try:
-        analyzer, anonymizer = _engine()
+        recognizers, anonymizer = _engine()
     except Exception:
         return text  # presidio unavailable — leave as-is (acceptable fail-open).
 
-    results = analyzer.analyze(text=text, entities=_ENTITIES, language="en")
+    results = []
+    for rec in recognizers:
+        results.extend(
+            rec.analyze(text=text, entities=rec.supported_entities, nlp_artifacts=None) or []
+        )
     if not results:
         return text
 
