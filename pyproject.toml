@@ -1,6 +1,6 @@
 [project]
 name = "agent-reflect-analyzer"
-version = "0.3.0"
+version = "1.0.0"
 description = "Reads shipped Claude Code sessions from GCS, runs C+D hybrid LLM analysis, emits improvement issues."
 requires-python = ">=3.12,<3.14"
 license = { text = "MIT" }

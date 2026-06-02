@@ -1,3 +1,3 @@
 """agent-reflect analyzer — DuckDB ingestion + LLM analysis + issue emit."""
 
-__version__ = "0.3.0"
+__version__ = "1.0.0"

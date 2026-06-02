@@ -32,7 +32,7 @@ tag commit and a clean-shell smoke run passing.
 - [x] Step 8: Reusable workflow + vendored github-app-token (sync-drift workflow → Follow-ups)
 - [x] Step 9: Slim CI (py-tests + ruff + scrub-test + subprocess-guard)
 - [x] Step 10: Lift release workflow AS-IS (+ bootstrap guard: idle until a tag exists)
-- [ ] Step 11: LICENSE (MIT) + README
+- [x] Step 11: LICENSE (MIT) + README + version bump to 1.0.0
 - [ ] Step 12: Final verification + initial-release PR + tag `v1.0.0`
 
 ## Decisions
