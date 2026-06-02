@@ -29,7 +29,7 @@ tag commit and a clean-shell smoke run passing.
 - [x] Step 5: Audit stdout fallback when `CLAUDE_PLUGIN_DATA` unset
 - [x] Step 6: scrub-test pre-commit + forbidden-patterns + source cleanup pass
 - [x] Step 7: pytest-socket + STYLE.md + renovate.json
-- [ ] Step 8: Reusable workflow + vendored github-app-token + sync-drift workflow
+- [x] Step 8: Reusable workflow + vendored github-app-token (sync-drift workflow → Follow-ups)
 - [ ] Step 9: Slim CI (py-tests + ruff + scrub-test + subprocess-guard)
 - [ ] Step 10: Lift release workflow AS-IS
 - [ ] Step 11: LICENSE (MIT) + README
@@ -65,14 +65,25 @@ tag commit and a clean-shell smoke run passing.
   pattern file or root docs); reports `file:line`. The smoke test builds its
   forbidden fixture token at runtime so the literal never lands in a scanned
   file. Source verified clean of all 7 patterns.
+- Vendored `scripts/github-app-token` makes `GH_APP_OP_ITEM` REQUIRED (no
+  internal-vault default), so nothing environment-specific is baked into a
+  public file. The reusable workflow adds a `gh_app_op_item` input to supply it.
+  This means the script body no longer matches the upstream byte-for-byte, so a
+  naive body-diff sync would fight the scrub — hence sync-vendored is deferred
+  and needs a scrub-aware transform (see Follow-ups).
 
 ## Dead Ends
 
 ## Next Action
 
-Step 8 — vendor `scripts/github-app-token` + adapt
-`.github/workflows/reflect-agent-sessions-reusable.yml` (drop the plugins
-checkout, snake_case inputs, `AGENT_REFLECT_*` env, working dir = repo root)
-and the `sync-vendored-scripts` workflow. Source: `anisha-inc/plugins/.github`.
+Step 9 — `.github/workflows/ci.yml`: jobs py-tests (uv sync --frozen --extra
+dev + pytest --cov), ruff, subprocess-guard (grep), scrub-test (base..HEAD),
+and an `if: always()` status gate over all four. Pin actions by SHA.
 
 ## Follow-ups
+
+- Add a `sync-vendored-scripts` workflow (weekly drift check of
+  `scripts/github-app-token` vs the internal upstream) with a scrub-aware
+  transform that re-applies the `GH_APP_OP_ITEM`-required adaptation, plus the
+  `strip-vendor-header.py` / `refresh-vendor.py` helpers. Needs `VENDOR_SYNC_TOKEN`
+  provisioned for this repo. Deferred from Step 8 (not v1.0.0-acceptance-blocking).
