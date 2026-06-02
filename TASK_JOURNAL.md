@@ -49,10 +49,18 @@ tag commit and a clean-shell smoke run passing.
   asserts that.
 - `auth.read_*` thread `Settings` lazily (default arg), leaving the four
   `llm/` call sites untouched; load failures degrade to None.
-- The automated scrub pattern list will NOT include bare `anisha`: the public
-  org slug (`anisha-inc/...` in the README `uses:` line) and the kept env var
-  `ANISHA_OP_SVC_TOKEN` both legitimately contain it. Genuinely-internal
-  identifiers are scrubbed by hand as files are touched and by the Step 6 list.
+- The scrub pattern list does NOT include bare `anisha`: the org slug
+  (`anisha-inc/...` in the README `uses:` line, LICENSE, settings.json) is
+  unavoidably public — the repo physically lives there. Genuinely-internal
+  identifiers are scrubbed by hand and enforced by the scrub-test gate.
+- Post-review remediation (after maintainer feedback): renamed the company-
+  prefixed op-token env var to the neutral `OP_SVC_TOKEN` (re-exported as the
+  standard `OP_SERVICE_ACCOUNT_TOKEN` for `op`); generalized the emitted-issue
+  template provenance. The scrub pattern list is NO LONGER committed (it would
+  be a consolidated internal-name leak) — it is sourced from a private GitHub
+  Actions variable `SCRUB_FORBIDDEN_PATTERNS` (provisioned via Terraform/Atlas)
+  in CI, or a local gitignored `.security/forbidden-patterns.txt` for
+  pre-commit; scrub-test skips with a warning when neither is present.
 
 - `run_external` gained `check=False` (returns the CompletedProcess) and `cwd`
   beyond the plan's signature, so `llm/flatten` can keep inspecting `claude -p`

@@ -59,6 +59,9 @@ jobs:
       - name: Scrub internal identifiers from added lines
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # Private pattern list (provisioned via Terraform as a repo/org variable).
+          # Absent → scrub-test.sh skips with a warning rather than failing.
+          SCRUB_FORBIDDEN_PATTERNS: ${{ vars.SCRUB_FORBIDDEN_PATTERNS }}
         run: |
           base="${BASE_SHA:-HEAD~1}"
           bash scripts/scrub-test.sh "$base" HEAD

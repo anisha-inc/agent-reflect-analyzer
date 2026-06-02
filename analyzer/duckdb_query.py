@@ -46,10 +46,10 @@ def parse_duration(since: str) -> datetime:
 
 
 def _op_read(ref: str) -> str:
-    """Read a 1P secret reference. Raises if ANISHA_OP_SVC_TOKEN missing."""
-    token = os.environ.get("ANISHA_OP_SVC_TOKEN")
+    """Read a 1P secret reference. Raises if OP_SVC_TOKEN missing."""
+    token = os.environ.get("OP_SVC_TOKEN")
     if not token:
-        raise RuntimeError("ANISHA_OP_SVC_TOKEN not set — cannot read 1P secret.")
+        raise RuntimeError("OP_SVC_TOKEN not set — cannot read 1P secret.")
     env = {**os.environ, "OP_SERVICE_ACCOUNT_TOKEN": token}
     out = run_external(["op", "read", ref], timeout=10, env=env, redact_argv_log=True).strip()
     if not out:

@@ -15,7 +15,7 @@ Usage:
   ./github-app-token --help       # this message
 
 Env required:
-  ANISHA_OP_SVC_TOKEN             # 1Password service-account token
+  OP_SVC_TOKEN             # 1Password service-account token
   GH_APP_OP_ITEM                  # 1Password item path for the GitHub App, e.g. "Vault/Item"
 
 Env optional:
@@ -30,9 +30,9 @@ fi
 
 set -euo pipefail
 
-: "${ANISHA_OP_SVC_TOKEN:?ANISHA_OP_SVC_TOKEN must be set}"
+: "${OP_SVC_TOKEN:?OP_SVC_TOKEN must be set}"
 : "${GH_APP_OP_ITEM:?GH_APP_OP_ITEM must be set (1Password item path for the GitHub App)}"
-export OP_SERVICE_ACCOUNT_TOKEN="$ANISHA_OP_SVC_TOKEN"
+export OP_SERVICE_ACCOUNT_TOKEN="$OP_SVC_TOKEN"
 
 # 1Password item fields: app_id (or APP_ID — op read is case-insensitive) and
 # private_key (full multi-line PEM). installation_id is auto-discovered via

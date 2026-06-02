@@ -40,7 +40,7 @@ explicitly.
 | `AGENT_REFLECT_ANTHROPIC_KEY_REF` | yes | 1Password reference for the Anthropic API key. |
 | `AGENT_REFLECT_OAUTH_TOKEN_REF` | yes | 1Password reference(s), comma-separated, for the `claude -p` OAuth token. |
 | `AGENT_REFLECT_TARGET_ORG_DEFAULT` | no | Default org for `--repo` inference. |
-| `ANISHA_OP_SVC_TOKEN` | yes | 1Password service-account token value (consumed by the `op` CLI). |
+| `OP_SVC_TOKEN` | yes | 1Password service-account token value (consumed by the `op` CLI). |
 | `GH_APP_OP_ITEM` | for issue emit | 1Password item path (`Vault/Item`) for the GitHub App used to mint issue-write tokens. |
 
 ## License

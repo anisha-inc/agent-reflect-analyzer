@@ -10,13 +10,13 @@ from analyzer import auth
 
 
 def test_mint_raises_without_op_token(monkeypatch):
-    monkeypatch.delenv("ANISHA_OP_SVC_TOKEN", raising=False)
-    with pytest.raises(RuntimeError, match="ANISHA_OP_SVC_TOKEN"):
+    monkeypatch.delenv("OP_SVC_TOKEN", raising=False)
+    with pytest.raises(RuntimeError, match="OP_SVC_TOKEN"):
         auth.mint_github_token(target_org="octo")
 
 
 def test_mint_returns_token_on_success(monkeypatch):
-    monkeypatch.setenv("ANISHA_OP_SVC_TOKEN", "dummy")
+    monkeypatch.setenv("OP_SVC_TOKEN", "dummy")
     with (
         patch.object(auth, "_script_path") as sp,
         patch.object(auth, "run_external", return_value="ghs_abc123\n"),
@@ -27,7 +27,7 @@ def test_mint_returns_token_on_success(monkeypatch):
 
 
 def test_mint_raises_on_script_failure(monkeypatch):
-    monkeypatch.setenv("ANISHA_OP_SVC_TOKEN", "dummy")
+    monkeypatch.setenv("OP_SVC_TOKEN", "dummy")
     with (
         patch.object(auth, "_script_path") as sp,
         patch.object(auth, "run_external", side_effect=RuntimeError("boom")),
@@ -38,7 +38,7 @@ def test_mint_raises_on_script_failure(monkeypatch):
 
 
 def test_mint_raises_on_empty_stdout(monkeypatch):
-    monkeypatch.setenv("ANISHA_OP_SVC_TOKEN", "dummy")
+    monkeypatch.setenv("OP_SVC_TOKEN", "dummy")
     with (
         patch.object(auth, "_script_path") as sp,
         patch.object(auth, "run_external", return_value="   \n"),

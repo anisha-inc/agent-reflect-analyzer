@@ -44,7 +44,7 @@ def _load_settings() -> Settings | None:
 
 
 def _op_read(ref: str) -> str | None:
-    token = os.environ.get("ANISHA_OP_SVC_TOKEN")
+    token = os.environ.get("OP_SVC_TOKEN")
     if not token:
         return None
     env = {**os.environ, "OP_SERVICE_ACCOUNT_TOKEN": token}
@@ -65,7 +65,7 @@ def check_hmac_1p() -> CheckResult:
             "hmac_1p",
             "secrets",
             False,
-            "1P reference not readable. Set ANISHA_OP_SVC_TOKEN in env to a "
+            "1P reference not readable. Set OP_SVC_TOKEN in env to a "
             "1Password service-account token, then restart the Claude session so "
             "the SessionStart hook picks it up. If `op read` itself fails, the "
             "service account lacks access to the referenced vault.",
@@ -174,7 +174,7 @@ def check_anthropic_key() -> CheckResult:
             "secrets",
             False,
             "ANTHROPIC_API_KEY env not set and 1P fallback unavailable. Usually "
-            "caused by a missing ANISHA_OP_SVC_TOKEN (see hmac_1p detail) — fix "
+            "caused by a missing OP_SVC_TOKEN (see hmac_1p detail) — fix "
             "that first and this probe auto-recovers via the 1P fallback.",
         )
     if len(key) < 20:

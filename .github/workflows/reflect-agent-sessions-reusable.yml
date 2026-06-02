@@ -79,7 +79,7 @@ jobs:
           export-env: true
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN_CI }}
-          ANISHA_OP_SVC_TOKEN: ${{ inputs.op_svc_token_vault_ref }}
+          OP_SVC_TOKEN: ${{ inputs.op_svc_token_vault_ref }}
 
       - name: Run analyzer
         env:

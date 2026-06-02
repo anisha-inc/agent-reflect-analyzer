@@ -4,7 +4,7 @@ The vendored script (``scripts/github-app-token``) prints the token to stdout.
 Per-repo / per-permission scoping is NOT available in the upstream script — the
 token follows the GitHub App's configured permissions (issues:write).
 
-If ``ANISHA_OP_SVC_TOKEN`` isn't in the environment, ``mint_github_token``
+If ``OP_SVC_TOKEN`` isn't in the environment, ``mint_github_token``
 raises — the caller catches it and surfaces an actionable message.
 """
 
@@ -22,7 +22,7 @@ from .subprocess_util import run_external
 
 def _op_read(ref: str) -> str | None:
     """Read a 1P secret reference. Returns None on any failure."""
-    token = os.environ.get("ANISHA_OP_SVC_TOKEN")
+    token = os.environ.get("OP_SVC_TOKEN")
     if not token:
         return None
     env = {**os.environ, "OP_SERVICE_ACCOUNT_TOKEN": token}
@@ -86,8 +86,8 @@ def _script_path() -> pathlib.Path:
 
 def mint_github_token(*, target_org: str, timeout_s: int = 30) -> str:
     """Return an installation token for ``target_org``. Raises on failure."""
-    if "ANISHA_OP_SVC_TOKEN" not in os.environ:
-        raise RuntimeError("ANISHA_OP_SVC_TOKEN not in env — cannot mint GitHub App token.")
+    if "OP_SVC_TOKEN" not in os.environ:
+        raise RuntimeError("OP_SVC_TOKEN not in env — cannot mint GitHub App token.")
     script = _script_path()
     if not script.exists():
         raise RuntimeError(f"vendored github-app-token not found at {script}")
