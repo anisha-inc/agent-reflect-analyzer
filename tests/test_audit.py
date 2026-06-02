@@ -30,7 +30,19 @@ def test_write_audit_writes_json_to_tmp(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "AUDIT_DIR", tmp_path / "audit")
     r = audit.RunRecord(since="7d", limit=10, sessions_analyzed=3)
     path = audit.write_audit(r)
+    assert path is not None
     assert path.exists()
     parsed = json.loads(path.read_text())
     assert parsed["since"] == "7d"
     assert parsed["sessions_analyzed"] == 3
+
+
+def test_write_audit_stdout_fallback_when_no_plugin_data(capsys, monkeypatch):
+    # The autouse fixture sets CLAUDE_PLUGIN_DATA; clear it to hit the fallback.
+    monkeypatch.delenv("CLAUDE_PLUGIN_DATA", raising=False)
+    r = audit.RunRecord(since="14d", sessions_analyzed=2)
+    result = audit.write_audit(r)
+    assert result is None
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["since"] == "14d"
+    assert parsed["sessions_analyzed"] == 2

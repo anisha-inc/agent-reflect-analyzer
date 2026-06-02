@@ -175,7 +175,7 @@ def main(
         verbose=verbose,
     )
     audit_log = audit.write_audit(record)
-    summary["audit_log"] = str(audit_log)
+    summary["audit_log"] = str(audit_log) if audit_log is not None else "stdout"
 
     if json_out:
         sys.stdout.write(json.dumps(summary, indent=2, ensure_ascii=False, default=str) + "\n")

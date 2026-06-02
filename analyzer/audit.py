@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 import pathlib
+import sys
 import time
 from typing import Any
 
@@ -59,8 +61,17 @@ class RunRecord:
         return dataclasses.asdict(self)
 
 
-def write_audit(record: RunRecord) -> pathlib.Path:
-    """Persist record to a timestamped log file. Returns its path."""
+def write_audit(record: RunRecord) -> pathlib.Path | None:
+    """Persist the record and return where it went.
+
+    With ``CLAUDE_PLUGIN_DATA`` set, write a timestamped log file under the
+    audit dir and return its path. Otherwise (e.g. a reusable CI workflow with
+    no writable state dir) dump the record to stdout and return ``None``.
+    """
+    if not os.environ.get("CLAUDE_PLUGIN_DATA"):
+        json.dump(record.to_dict(), sys.stdout, indent=2, ensure_ascii=False)
+        sys.stdout.write("\n")
+        return None
     config.AUDIT_DIR.mkdir(parents=True, exist_ok=True)
     log = config.AUDIT_DIR / f"reflect-{int(record.started_at)}.log"
     log.write_text(json.dumps(record.to_dict(), indent=2, ensure_ascii=False))

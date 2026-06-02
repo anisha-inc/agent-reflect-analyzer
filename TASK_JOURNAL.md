@@ -26,7 +26,7 @@ tag commit and a clean-shell smoke run passing.
 - [x] Step 2: Copy analyzer package + tests + templates (promote templates into package)
 - [x] Step 3: Pydantic Settings v2 strict env loader (`AGENT_REFLECT_*`, no defaults) + cross-cutting
 - [x] Step 4: `subprocess_util.run_external()` wrapper + migrate call sites + ruff guard
-- [ ] Step 5: Audit stdout fallback when `CLAUDE_PLUGIN_DATA` unset
+- [x] Step 5: Audit stdout fallback when `CLAUDE_PLUGIN_DATA` unset
 - [ ] Step 6: scrub-test pre-commit + forbidden-patterns + source cleanup pass
 - [ ] Step 7: pytest-socket + STYLE.md + renovate.json
 - [ ] Step 8: Reusable workflow + vendored github-app-token + sync-drift workflow
@@ -65,8 +65,11 @@ tag commit and a clean-shell smoke run passing.
 
 ## Next Action
 
-Step 5 — `analyzer/audit.py` `write_audit()` falls back to `sys.stdout` (returns
-None) when `CLAUDE_PLUGIN_DATA` is unset; `cli.py` prints `"stdout"` in the
-summary; add a capsys test in `tests/test_audit.py`.
+Step 6 — `.security/forbidden-patterns.txt` + `scripts/scrub-test.sh` +
+`.pre-commit-config.yaml` + smoke test, then a cleanup pass. The scrub scans
+only the lifted source (`analyzer/`, `tests/`, `scripts/`) — NOT README /
+workflows / the pattern file itself — and the pattern list excludes bare
+`anisha` (public org + kept env var). Patterns: `Atlas Agent`, `Speedy Shared`,
+`Antropic`, `SPD-`, `atlas#`, `vanilevsky`, `Vladimir`.
 
 ## Follow-ups
