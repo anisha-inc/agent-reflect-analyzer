@@ -18,13 +18,29 @@ import subprocess
 import sys
 from typing import Any
 
+from pydantic import ValidationError
+
 from . import config, identity
+from .config import Settings
 
 CheckResult = dict[str, Any]
+
+_CONFIG_MISSING_DETAIL = (
+    "analyzer configuration invalid — set the required AGENT_REFLECT_* environment "
+    "variables (see README). A missing variable raises before any probe can run."
+)
 
 
 def _result(id_: str, category: str, ok: bool, detail: str) -> CheckResult:
     return {"id": id_, "category": category, "ok": ok, "detail": detail}
+
+
+def _load_settings() -> Settings | None:
+    """Load Settings, returning None (rather than raising) when env is incomplete."""
+    try:
+        return config.load_settings()
+    except ValidationError:
+        return None
 
 
 def _op_read(ref: str) -> str | None:
@@ -42,14 +58,17 @@ def _op_read(ref: str) -> str | None:
 
 
 def check_hmac_1p() -> CheckResult:
-    val = _op_read(config.HMAC_ACCESS_KEY_REF)
+    settings = _load_settings()
+    if settings is None:
+        return _result("hmac_1p", "secrets", False, _CONFIG_MISSING_DETAIL)
+    val = _op_read(settings.hmac_akid_ref)
     if val is None:
         return _result(
             "hmac_1p", "secrets", False,
-            "1P item not readable. Fix: in a fresh terminal run "
-            "`export ANISHA_OP_SVC_TOKEN=\"$(op read 'op://Speedy Shared/1Password/SERVICE_ACCOUNT_TOKEN__ATLAS_AGENT_ACCESS')\"` "
-            "(unlocks via 1P desktop / touchID), then restart Claude session so SessionStart hook picks it up. "
-            "If `op read` itself fails — atlas#413 provisioning didn't reach your vault.",
+            "1P reference not readable. Set ANISHA_OP_SVC_TOKEN in env to a "
+            "1Password service-account token, then restart the Claude session so "
+            "the SessionStart hook picks it up. If `op read` itself fails, the "
+            "service account lacks access to the referenced vault.",
         )
     if len(val) < 30:
         return _result(
@@ -80,12 +99,12 @@ def check_app_token_script() -> CheckResult:
         path = os.path.join(plugin_root, "scripts", "github-app-token")
     else:
         path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", "scripts", "github-app-token"
+            os.path.dirname(__file__), "..", "scripts", "github-app-token"
         )
     if not os.path.isfile(path):
         return _result(
             "app_token", "auth", False,
-            f"github-app-token script missing at {path} (run /sync-settings).",
+            f"github-app-token script missing at {path}.",
         )
     if not os.access(path, os.X_OK):
         return _result("app_token", "auth", False, f"{path} not executable (chmod +x).")
@@ -97,6 +116,9 @@ def check_app_token_script() -> CheckResult:
 
 
 def check_recent_ships() -> CheckResult:
+    settings = _load_settings()
+    if settings is None:
+        return _result("recent_ships", "data", False, _CONFIG_MISSING_DETAIL)
     if not shutil.which("gsutil"):
         return _result(
             "recent_ships", "data", False,
@@ -106,12 +128,12 @@ def check_recent_ships() -> CheckResult:
         dev = identity.dev_id()
     except (RuntimeError, subprocess.CalledProcessError):
         return _result("recent_ships", "data", False, "git user.email empty — set it.")
-    url = f"{config.GCS_BUCKET}/{config.GCS_RAW_PREFIX}/dev={dev}/"
+    url = f"{settings.gcs_bucket}/{config.GCS_RAW_PREFIX}/dev={dev}/"
     try:
         out = subprocess.check_output(
             ["gsutil", "ls", url], stderr=subprocess.STDOUT, text=True, timeout=20
         )
-        lines = [l for l in out.strip().splitlines() if l.strip()]
+        lines = [ln for ln in out.strip().splitlines() if ln.strip()]
         if not lines:
             return _result(
                 "recent_ships", "data", False,
@@ -128,20 +150,22 @@ def check_recent_ships() -> CheckResult:
 def check_anthropic_key() -> CheckResult:
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
-        # Try fallback from 1P. Skill auto-bootstraps env using same ref.
-        key = _op_read(config.ANTHROPIC_KEY_REF)
+        settings = _load_settings()
+        if settings is None:
+            return _result("anthropic_key", "secrets", False, _CONFIG_MISSING_DETAIL)
+        # Try fallback from 1P. Skill auto-bootstraps env using the same ref.
+        key = _op_read(settings.anthropic_key_ref)
         if key:
             os.environ["ANTHROPIC_API_KEY"] = key
             return _result(
                 "anthropic_key", "secrets", True,
-                "ANTHROPIC_API_KEY loaded from 1P (op://Atlas Agent/Antropic/.../ANTHROPIC_API_KEY).",
+                "ANTHROPIC_API_KEY loaded from 1P via AGENT_REFLECT_ANTHROPIC_KEY_REF.",
             )
         return _result(
             "anthropic_key", "secrets", False,
-            "ANTHROPIC_API_KEY env not set and 1P fallback unavailable. "
-            "Usually caused by missing ANISHA_OP_SVC_TOKEN (see hmac_1p detail) — fix that first, "
-            "this probe will auto-recover via 1P fallback. As a manual fallback: "
-            "`export ANTHROPIC_API_KEY=\"$(op read 'op://Atlas Agent/Antropic/atlas-agent-test-key/ANTHROPIC_API_KEY')\"`.",
+            "ANTHROPIC_API_KEY env not set and 1P fallback unavailable. Usually "
+            "caused by a missing ANISHA_OP_SVC_TOKEN (see hmac_1p detail) — fix "
+            "that first and this probe auto-recovers via the 1P fallback.",
         )
     if len(key) < 20:
         return _result("anthropic_key", "secrets", False, "ANTHROPIC_API_KEY suspiciously short.")
@@ -186,7 +210,10 @@ def bootstrap_anthropic_key() -> bool:
     """
     if os.environ.get("ANTHROPIC_API_KEY"):
         return True
-    val = _op_read(config.ANTHROPIC_KEY_REF)
+    settings = _load_settings()
+    if settings is None:
+        return False
+    val = _op_read(settings.anthropic_key_ref)
     if val:
         os.environ["ANTHROPIC_API_KEY"] = val
         return True
@@ -205,7 +232,7 @@ def check_python_deps() -> CheckResult:
     if missing:
         return _result(
             "python_deps", "env", False,
-            f"missing modules: {', '.join(missing)} (run `uv sync` in lib/analyzer/).",
+            f"missing modules: {', '.join(missing)} (run `uv sync --extra dev`).",
         )
     return _result("python_deps", "env", True, f"all {len(_PY_DEPS)} modules importable.")
 
@@ -220,8 +247,11 @@ def check_hmac_duckdb_smoke() -> CheckResult:
         import duckdb  # noqa: F401
     except ImportError:
         return _result("hmac_duckdb_smoke", "data", False, "duckdb module not importable.")
-    key_id = _op_read(config.HMAC_ACCESS_KEY_REF)
-    secret = _op_read(config.HMAC_SECRET_KEY_REF)
+    settings = _load_settings()
+    if settings is None:
+        return _result("hmac_duckdb_smoke", "data", False, _CONFIG_MISSING_DETAIL)
+    key_id = _op_read(settings.hmac_akid_ref)
+    secret = _op_read(settings.hmac_secret_ref)
     if not key_id or not secret:
         return _result(
             "hmac_duckdb_smoke", "data", False,

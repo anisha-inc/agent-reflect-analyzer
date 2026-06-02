@@ -10,8 +10,30 @@ import json
 import sys
 
 import click
+from pydantic import ValidationError
 
 from . import audit, checks, config
+
+
+def _resolve_repo(repo: str | None, *, emit_issues: bool) -> str | None:
+    """Resolve the issue target repo: ``--repo`` wins, else expand a bare name
+    via ``AGENT_REFLECT_TARGET_ORG_DEFAULT``. Fail actionably when emitting
+    without a resolvable ``owner/name``."""
+    if repo and "/" in repo:
+        return repo
+    if not emit_issues:
+        return repo
+    default_org = None
+    try:
+        default_org = config.load_settings().target_org_default
+    except ValidationError:
+        default_org = None
+    if repo and default_org:
+        return f"{default_org}/{repo}"
+    raise click.UsageError(
+        "--emit-issues requires a target repository: pass --repo owner/name "
+        "(or --repo name together with AGENT_REFLECT_TARGET_ORG_DEFAULT)."
+    )
 
 
 def _emit_check(results: list[checks.CheckResult], as_json: bool) -> int:
@@ -73,6 +95,8 @@ def main(
     if check_mode:
         results = checks.run_all()
         sys.exit(_emit_check(results, json_out))
+
+    repo = _resolve_repo(repo, emit_issues=emit_issues)
 
     # Full pipeline (Steps 5-8) lives in analyzer.run.run_pipeline. Import lazily
     # so that --check (the hot path called by skill on every invocation) doesn't

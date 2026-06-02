@@ -15,7 +15,7 @@ from typing import Any
 
 import jinja2
 
-from . import auth, config
+from . import auth, config, util
 from .llm.schemas import Candidate
 
 _TEMPLATE_DIR = pathlib.Path(__file__).parent / "templates"
@@ -62,7 +62,7 @@ def _ensure_label(repo: str, env: dict) -> None:
             ["gh", "label", "create", config.ISSUE_LABEL,
              "--repo", repo,
              "--color", "FBCA04",
-             "--description", "Pattern detected by agent-reflect analyzer (SPD-125)"],
+             "--description", "Pattern detected by the agent-reflect analyzer"],
             env=env, text=True, stderr=subprocess.STDOUT, timeout=15,
         )
     except subprocess.CalledProcessError as e:
@@ -93,7 +93,7 @@ def emit_issue(
         return None
 
     if token is None:
-        token = auth.mint_github_token()
+        token = auth.mint_github_token(target_org=util.parse_owner(repo))
 
     env = {**os.environ, "GH_TOKEN": token}
     _ensure_label(repo, env)

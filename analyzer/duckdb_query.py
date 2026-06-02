@@ -1,8 +1,8 @@
 """DuckDB ingestion against shipped session JSONL in GCS.
 
-DuckDB connects via httpfs + GCS HMAC secret (atlas#413 provisioned). Sessions
-are loaded as raw JSON, then aggregated per session in Python (the nested
-content[] arrays are non-trivial to flatten in SQL alone — see jsonl-schema.md).
+DuckDB connects via httpfs + a GCS HMAC secret. Sessions are loaded as raw
+JSON, then aggregated per session in Python (the nested content[] arrays are
+non-trivial to flatten in SQL alone — see jsonl-schema.md).
 
 `load_sessions()` returns the ranked + capped list (uses metrics.interestingness
 for ordering, applies `/reflect-agent-sessions` self-pollution filter from
@@ -63,8 +63,9 @@ def connect():
     """Open a DuckDB in-memory connection with httpfs + GCS HMAC secret loaded."""
     import duckdb  # local: keep top-level import optional for unit tests
 
-    key_id = _op_read(config.HMAC_ACCESS_KEY_REF)
-    secret = _op_read(config.HMAC_SECRET_KEY_REF)
+    settings = config.load_settings()
+    key_id = _op_read(settings.hmac_akid_ref)
+    secret = _op_read(settings.hmac_secret_ref)
     con = duckdb.connect(":memory:")
     con.execute("INSTALL httpfs; LOAD httpfs;")
     con.execute(
@@ -75,7 +76,8 @@ def connect():
 
 
 def _glob() -> str:
-    return f"{config.GCS_BUCKET}/{config.GCS_RAW_PREFIX}/dev=*/proj=*/*.jsonl"
+    settings = config.load_settings()
+    return f"{settings.gcs_bucket}/{config.GCS_RAW_PREFIX}/dev=*/proj=*/*.jsonl"
 
 
 def fetch_raw(con, since: str, hard_limit: int | None = None) -> list[dict[str, Any]]:

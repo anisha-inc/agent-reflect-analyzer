@@ -112,8 +112,8 @@ def run_pipeline(
         try:
             token = None
             try:
-                from . import auth
-                token = auth.mint_github_token()
+                from . import auth, util
+                token = auth.mint_github_token(target_org=util.parse_owner(repo))
             except RuntimeError as e:
                 record.warnings.append(f"mint_token_failed: {e}")
             for c in candidates:

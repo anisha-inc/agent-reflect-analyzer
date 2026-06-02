@@ -1,38 +1,80 @@
-"""Shared constants and runtime configuration for the analyzer."""
+"""Runtime configuration for the analyzer.
+
+Secret- and environment-dependent settings live in the strict ``Settings``
+pydantic-settings model: every field is required, has no default, and is read
+from an ``AGENT_REFLECT_*`` environment variable. Loading with a missing
+variable raises ``pydantic.ValidationError`` — fail fast, never fall back to a
+hard-coded value.
+
+Non-secret tunables (model names, default window, label) stay as module-level
+constants below.
+"""
 
 from __future__ import annotations
 
 import os
 import pathlib
+from typing import Annotated
 
-GCS_BUCKET = "gs://anisha-claude-logs"
+from pydantic import AliasChoices, Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Strict environment configuration. No defaults for secret-bearing fields."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="AGENT_REFLECT_",
+        extra="forbid",
+        case_sensitive=False,
+        populate_by_name=True,
+    )
+
+    # Full bucket URL, e.g. ``gs://my-bucket``. → AGENT_REFLECT_GCS_BUCKET
+    gcs_bucket: str
+    # 1Password reference for the GCS HMAC access key id. → AGENT_REFLECT_HMAC_AKID_REF
+    hmac_akid_ref: str
+    # 1Password reference for the GCS HMAC secret. → AGENT_REFLECT_HMAC_SECRET_REF
+    hmac_secret_ref: str
+    # 1Password reference for the Anthropic API key. → AGENT_REFLECT_ANTHROPIC_KEY_REF
+    anthropic_key_ref: str
+    # Comma-separated 1Password references for the ``claude -p`` OAuth token.
+    # → AGENT_REFLECT_OAUTH_TOKEN_REF (singular env var, list-valued field).
+    oauth_token_refs: Annotated[list[str], NoDecode] = Field(
+        validation_alias=AliasChoices("AGENT_REFLECT_OAUTH_TOKEN_REF", "oauth_token_refs"),
+    )
+    # Optional default org for ``--repo`` inference. → AGENT_REFLECT_TARGET_ORG_DEFAULT
+    target_org_default: str | None = None
+
+    @field_validator("oauth_token_refs", mode="before")
+    @classmethod
+    def _split_oauth_refs(cls, v: object) -> object:
+        """Split the comma-separated env value; an empty string is invalid.
+
+        Defense-in-depth interface contract: an explicitly empty
+        ``AGENT_REFLECT_OAUTH_TOKEN_REF`` must raise, not silently yield ``[]``.
+        """
+        if isinstance(v, str):
+            parts = [p.strip() for p in v.split(",") if p.strip()]
+            if not parts:
+                raise ValueError(
+                    "AGENT_REFLECT_OAUTH_TOKEN_REF must list at least one 1Password reference"
+                )
+            return parts
+        return v
+
+
+def load_settings() -> Settings:
+    """Construct ``Settings`` from the environment. Raises on missing vars."""
+    return Settings()  # type: ignore[call-arg]  # fields are sourced from env
+
+
+# --- Non-secret constants -------------------------------------------------
+
 GCS_RAW_PREFIX = "raw"
 GCS_S3_ENDPOINT = "storage.googleapis.com"
 
-HMAC_OP_ITEM = "op://Atlas Agent/claude-logs-hmac"
-HMAC_ACCESS_KEY_REF = f"{HMAC_OP_ITEM}/access_key_id"
-HMAC_SECRET_KEY_REF = f"{HMAC_OP_ITEM}/secret_access_key"
-
-# NB: 1P item is misspelled "Antropic" (created 2026-05-25). Renaming would be
-# scoped, opaque, and out of this PR — we ref the actual title.
-#
-# Two distinct tokens for two distinct billing paths:
-#   - ANTHROPIC_KEY_REF: API key for AsyncAnthropic (Stages [4]/[5] Haiku).
-#                        Pay-per-call billing (~$0.01 per Haiku request).
-#   - OAUTH_TOKEN_REF:   Long-life OAuth token for `claude -p` subprocess
-#                        (Stage [3] Opus). Subscription billing (Pro/Max/
-#                        Enterprise), $0 marginal. Set as CLAUDE_CODE_OAUTH_TOKEN
-#                        in the subprocess env; the CLI reads it natively.
-ANTHROPIC_KEY_REF = "op://Atlas Agent/Antropic/atlas-agent-test-key/ANTHROPIC_API_KEY"
-# Vladimir renamed `CLAUDE_CODE_OAUTH_TOKEN___` → `CLAUDE_CODE_OAUTH_TOKEN`
-# on 2026-05-27; auth.read_oauth_token() tries both during transition.
-OAUTH_TOKEN_REFS = (
-    "op://Atlas Agent/Antropic/atlas-agent-test-key/CLAUDE_CODE_OAUTH_TOKEN",
-    "op://Atlas Agent/Antropic/atlas-agent-test-key/CLAUDE_CODE_OAUTH_TOKEN___",
-)
-
 ISSUE_LABEL = "improvement-by-agent"
-DEFAULT_TARGET_ORG = "anisha-inc"
 
 DEFAULT_TOP_K = 10
 DEFAULT_CONCURRENCY = 10
