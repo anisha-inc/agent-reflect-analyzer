@@ -28,7 +28,7 @@ tag commit and a clean-shell smoke run passing.
 - [x] Step 4: `subprocess_util.run_external()` wrapper + migrate call sites + ruff guard
 - [x] Step 5: Audit stdout fallback when `CLAUDE_PLUGIN_DATA` unset
 - [x] Step 6: scrub-test pre-commit + forbidden-patterns + source cleanup pass
-- [ ] Step 7: pytest-socket + STYLE.md + renovate.json
+- [x] Step 7: pytest-socket + STYLE.md + renovate.json
 - [ ] Step 8: Reusable workflow + vendored github-app-token + sync-drift workflow
 - [ ] Step 9: Slim CI (py-tests + ruff + scrub-test + subprocess-guard)
 - [ ] Step 10: Lift release workflow AS-IS
@@ -70,8 +70,9 @@ tag commit and a clean-shell smoke run passing.
 
 ## Next Action
 
-Step 7 — dev deps (`pytest-socket` etc.) + pytest `addopts = "--disable-socket
---allow-unix-socket"`, `STYLE.md`, `renovate.json`; `uv lock`; verify the light
-test subset still passes under socket lockdown.
+Step 8 — vendor `scripts/github-app-token` + adapt
+`.github/workflows/reflect-agent-sessions-reusable.yml` (drop the plugins
+checkout, snake_case inputs, `AGENT_REFLECT_*` env, working dir = repo root)
+and the `sync-vendored-scripts` workflow. Source: `anisha-inc/plugins/.github`.
 
 ## Follow-ups
