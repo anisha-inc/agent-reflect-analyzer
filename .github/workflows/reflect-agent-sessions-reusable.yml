@@ -1,0 +1,104 @@
+name: Reflect agent sessions (reusable)
+
+# Reusable workflow for scheduled agent reflection. Consumers pin a tag, e.g.
+#   uses: anisha-inc/agent-reflect-analyzer/.github/workflows/reflect-agent-sessions-reusable.yml@v1.0.0
+# All 1Password references and the target repo are passed in by the caller — no
+# environment-specific values are baked in here.
+
+on:
+  workflow_call:
+    inputs:
+      since:
+        description: "Time window (1d, 7d, 24h, ...). Default 1d."
+        type: string
+        default: '1d'
+      limit:
+        description: "Max sessions to analyze."
+        type: number
+        default: 100
+      repo:
+        description: "Target repo (owner/name) to analyze + emit issues into."
+        type: string
+        required: true
+      gcs_bucket:
+        description: "Full bucket URL (gs://...)."
+        type: string
+        required: true
+      hmac_akid_ref:
+        description: "1Password reference for the GCS HMAC access key id."
+        type: string
+        required: true
+      hmac_secret_ref:
+        description: "1Password reference for the GCS HMAC secret."
+        type: string
+        required: true
+      anthropic_key_ref:
+        description: "1Password reference for the Anthropic API key."
+        type: string
+        required: true
+      oauth_token_ref:
+        description: "1Password reference(s), comma-separated, for the claude -p OAuth token."
+        type: string
+        required: true
+      op_svc_token_vault_ref:
+        description: "1Password reference resolving to the service-account token value (consumed by op)."
+        type: string
+        required: true
+      gh_app_op_item:
+        description: "1Password item path (Vault/Item) for the GitHub App used to mint issue-write tokens."
+        type: string
+        required: true
+    secrets:
+      OP_SERVICE_ACCOUNT_TOKEN_CI:
+        description: "1Password service-account token (org-level) that bootstraps op."
+        required: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  reflect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6 # v6.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Load secrets (op CLI + 1P-backed env)
+        uses: 1password/load-secrets-action@92467eb28f72e8255933372f1e0707c567ce2259 # v4.0.0
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN_CI }}
+          OP_SVC_TOKEN: ${{ inputs.op_svc_token_vault_ref }}
+
+      - name: Run analyzer
+        env:
+          # `since`/`limit`/`repo` are surfaced as intermediate env vars (not
+          # interpolated into the run: block) to harden against shell injection
+          # if a caller ever becomes untrusted.
+          GH_TOKEN: ${{ github.token }}
+          GH_APP_OP_ITEM: ${{ inputs.gh_app_op_item }}
+          AGENT_REFLECT_GCS_BUCKET: ${{ inputs.gcs_bucket }}
+          AGENT_REFLECT_HMAC_AKID_REF: ${{ inputs.hmac_akid_ref }}
+          AGENT_REFLECT_HMAC_SECRET_REF: ${{ inputs.hmac_secret_ref }}
+          AGENT_REFLECT_ANTHROPIC_KEY_REF: ${{ inputs.anthropic_key_ref }}
+          AGENT_REFLECT_OAUTH_TOKEN_REF: ${{ inputs.oauth_token_ref }}
+          ANALYZER_SINCE: ${{ inputs.since }}
+          ANALYZER_LIMIT: ${{ inputs.limit }}
+          ANALYZER_REPO: ${{ inputs.repo }}
+        run: |
+          uv run analyzer-cli \
+            --since "$ANALYZER_SINCE" \
+            --limit "$ANALYZER_LIMIT" \
+            --repo "$ANALYZER_REPO" \
+            --emit-issues

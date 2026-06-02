@@ -1,0 +1,20 @@
+Сжимай сессию Claude Code до структурированной JSON-суммарки. Один вход — одна сессия.
+
+ВЫХОД — STRICT JSON по схеме:
+
+{
+  "session_id": "<строка из ввода>",
+  "summary": "1-2 sentences по-русски, что произошло",
+  "user_intent_category": "refactor"|"bugfix"|"feature"|"exploration"|"docs"|"infra"|"other",
+  "tools_chained": ["Read","Edit","Bash"],
+  "errors_encountered": ["<short error class>", ...],
+  "failure_mode_hint": "<MAST slot | NONE>",
+  "trajectory_quality": "smooth"|"hesitant"|"chaotic"|"stuck",
+  "actionable_pattern_seed": "<если виден pattern→1 sentence; иначе NONE>"
+}
+
+Принципы:
+- НЕ цитируй код, секреты, или личные данные.
+- summary должен быть generic ("agent re-read same file 5 times" вместо "agent
+  re-read foo.py 5 times").
+- Отвечай ТОЛЬКО валидным JSON, без markdown.

@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  py-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6 # v6.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen --extra dev --python 3.12
+      - run: uv run pytest tests/ -v --cov=analyzer --cov-report=term
+
+  ruff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6 # v6.1.0
+      - run: uvx ruff@0.15.15 check analyzer tests
+      - run: uvx ruff@0.15.15 format --check analyzer tests
+
+  subprocess-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: No bare subprocess imports outside the wrapper
+        run: |
+          matches="$(grep -rEn '^import subprocess|^from subprocess' analyzer | grep -v 'analyzer/subprocess_util.py' || true)"
+          if [ -n "$matches" ]; then
+            echo "Bare subprocess import — use analyzer.subprocess_util.run_external():" >&2
+            echo "$matches" >&2
+            exit 1
+          fi
+
+  scrub-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Scrub internal identifiers from added lines
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # Private pattern list, stored as a secret (masked in logs; provisioned
+          # via Terraform). Absent (e.g. fork PRs) → scrub-test.sh skips with a
+          # warning rather than failing.
+          SCRUB_FORBIDDEN_PATTERNS: ${{ secrets.SCRUB_FORBIDDEN_PATTERNS }}
+        run: |
+          base="${BASE_SHA:-HEAD~1}"
+          bash scripts/scrub-test.sh "$base" HEAD
+
+  status:
+    if: always()
+    needs: [py-tests, ruff, subprocess-guard, scrub-test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all checks to pass
+        env:
+          R_TESTS: ${{ needs.py-tests.result }}
+          R_RUFF: ${{ needs.ruff.result }}
+          R_GUARD: ${{ needs.subprocess-guard.result }}
+          R_SCRUB: ${{ needs.scrub-test.result }}
+        run: |
+          echo "py-tests=$R_TESTS ruff=$R_RUFF subprocess-guard=$R_GUARD scrub-test=$R_SCRUB"
+          for r in "$R_TESTS" "$R_RUFF" "$R_GUARD" "$R_SCRUB"; do
+            [ "$r" = "success" ] || { echo "A required job did not succeed." >&2; exit 1; }
+          done

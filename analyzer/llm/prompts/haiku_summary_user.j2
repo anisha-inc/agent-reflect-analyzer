@@ -1,0 +1,7 @@
+SESSION {{ session.sessionId }} dev={{ dev_id }} proj={{ proj_id }} started={{ session.started_at }}
+USER_INTENT: {{ session.first_user_prompt | truncate(800, end="…") }}
+TOOLS_USED: {% for tool, count in session.tool_counts.items() %}{{ tool }}({{ count }}){% if not loop.last %}, {% endif %}{% endfor %}
+ERRORS: [{% for e in session.error_classes %}"{{ e }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+THINKING_DIGEST: {{ session.thinking_digest | truncate(400, end="…") }}
+LAST_ASSISTANT: {{ session.last_assistant_text | truncate(600, end="…") }}
+OUTCOME: {{ session.outcome }}
