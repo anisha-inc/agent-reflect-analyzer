@@ -20,7 +20,7 @@ Env required:
 
 Env optional:
   GH_APP_INSTALLATION_ID          # bypass auto-discovery
-  GH_APP_TARGET_ORG               # org login to scope the installation (default: anisha-inc)
+  GH_APP_TARGET_ORG               # org login for discovery (required unless GH_APP_INSTALLATION_ID is set)
 
 NB: token is installation-scoped (org-level). Per-repo / per-permission scoping
 is NOT supported by this variant. Permissions follow the GitHub App config.
@@ -74,7 +74,7 @@ if [ -n "${GH_APP_INSTALLATION_ID:-}" ]; then
 else
   installations=$(gh_api "https://api.github.com/app/installations")
 
-  GH_APP_TARGET_ORG="${GH_APP_TARGET_ORG:-anisha-inc}"
+  : "${GH_APP_TARGET_ORG:?GH_APP_TARGET_ORG must be set (or pass GH_APP_INSTALLATION_ID to skip discovery)}"
   INSTALLATION_ID=$(printf '%s' "$installations" \
     | jq -r --arg org "$GH_APP_TARGET_ORG" \
         '.[] | select(.account.login==$org) | .id' \

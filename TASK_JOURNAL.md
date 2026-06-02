@@ -61,6 +61,9 @@ tag commit and a clean-shell smoke run passing.
   Actions variable `SCRUB_FORBIDDEN_PATTERNS` (provisioned via Terraform/Atlas)
   in CI, or a local gitignored `.security/forbidden-patterns.txt` for
   pre-commit; scrub-test skips with a warning when neither is present.
+  Also dropped the hardcoded `anisha-inc` default for `GH_APP_TARGET_ORG` in the
+  vendored token script — it is now required for discovery (the analyzer always
+  passes it; direct CLI use must set it or `GH_APP_INSTALLATION_ID`).
 
 - `run_external` gained `check=False` (returns the CompletedProcess) and `cwd`
   beyond the plan's signature, so `llm/flatten` can keep inspecting `claude -p`
