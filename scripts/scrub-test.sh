@@ -7,7 +7,7 @@
 # The pattern list itself is NOT stored in this public repo (it would be a
 # consolidated leak). It is sourced, in order:
 #   1. $SCRUB_FORBIDDEN_PATTERNS         — newline-separated patterns (CI passes
-#                                          this from a private GitHub Actions var)
+#                                          this from a private GitHub Actions secret)
 #   2. $SCRUB_FORBIDDEN_PATTERNS_FILE    — path to a local pattern file
 #   3. .security/forbidden-patterns.txt  — local, gitignored (developer copy)
 # If none is available the scan is skipped (a fresh public clone has no internal

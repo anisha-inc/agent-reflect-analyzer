@@ -58,8 +58,8 @@ tag commit and a clean-shell smoke run passing.
   standard `OP_SERVICE_ACCOUNT_TOKEN` for `op`); generalized the emitted-issue
   template provenance. The scrub pattern list is NO LONGER committed (it would
   be a consolidated internal-name leak) — it is sourced from a private GitHub
-  Actions variable `SCRUB_FORBIDDEN_PATTERNS` (provisioned via Terraform/Atlas)
-  in CI, or a local gitignored `.security/forbidden-patterns.txt` for
+  Actions secret `SCRUB_FORBIDDEN_PATTERNS` (provisioned via Terraform/Atlas,
+  masked in logs) in CI, or a local gitignored `.security/forbidden-patterns.txt` for
   pre-commit; scrub-test skips with a warning when neither is present.
   Also dropped the hardcoded `anisha-inc` default for `GH_APP_TARGET_ORG` in the
   vendored token script — it is now required for discovery (the analyzer always
