@@ -27,7 +27,7 @@ tag commit and a clean-shell smoke run passing.
 - [x] Step 3: Pydantic Settings v2 strict env loader (`AGENT_REFLECT_*`, no defaults) + cross-cutting
 - [x] Step 4: `subprocess_util.run_external()` wrapper + migrate call sites + ruff guard
 - [x] Step 5: Audit stdout fallback when `CLAUDE_PLUGIN_DATA` unset
-- [ ] Step 6: scrub-test pre-commit + forbidden-patterns + source cleanup pass
+- [x] Step 6: scrub-test pre-commit + forbidden-patterns + source cleanup pass
 - [ ] Step 7: pytest-socket + STYLE.md + renovate.json
 - [ ] Step 8: Reusable workflow + vendored github-app-token + sync-drift workflow
 - [ ] Step 9: Slim CI (py-tests + ruff + scrub-test + subprocess-guard)
@@ -61,15 +61,17 @@ tag commit and a clean-shell smoke run passing.
   baseline and resolve `E501` in lifted code; `tests/**` ignores all `S` rules
   (fixtures carry dummy tokens/temp paths/subprocess mocks).
 
+- scrub-test scans the diff of `analyzer/ tests/ scripts/ .github/` only (not the
+  pattern file or root docs); reports `file:line`. The smoke test builds its
+  forbidden fixture token at runtime so the literal never lands in a scanned
+  file. Source verified clean of all 7 patterns.
+
 ## Dead Ends
 
 ## Next Action
 
-Step 6 — `.security/forbidden-patterns.txt` + `scripts/scrub-test.sh` +
-`.pre-commit-config.yaml` + smoke test, then a cleanup pass. The scrub scans
-only the lifted source (`analyzer/`, `tests/`, `scripts/`) — NOT README /
-workflows / the pattern file itself — and the pattern list excludes bare
-`anisha` (public org + kept env var). Patterns: `Atlas Agent`, `Speedy Shared`,
-`Antropic`, `SPD-`, `atlas#`, `vanilevsky`, `Vladimir`.
+Step 7 — dev deps (`pytest-socket` etc.) + pytest `addopts = "--disable-socket
+--allow-unix-socket"`, `STYLE.md`, `renovate.json`; `uv lock`; verify the light
+test subset still passes under socket lockdown.
 
 ## Follow-ups

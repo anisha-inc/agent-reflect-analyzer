@@ -36,9 +36,9 @@ def test_redact_jwt_removed():
 
 
 def test_redact_email_removed():
-    text = "Contact vladimir@example.com about this."
+    text = "Contact alice@example.com about this."
     out = redact.redact_string(text)
-    assert "vladimir@example.com" not in out
+    assert "alice@example.com" not in out
 
 
 def test_redact_does_not_touch_code_identifiers():

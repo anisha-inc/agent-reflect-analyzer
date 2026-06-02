@@ -1,0 +1,11 @@
+# Internal identifiers that must never enter this public repository.
+# Matched case-insensitively against added source lines by scripts/scrub-test.sh.
+# NOTE: the public org slug ("anisha-inc") and the kept env var
+# (ANISHA_OP_SVC_TOKEN) are intentionally NOT listed — they are public.
+Atlas Agent
+Speedy Shared
+Antropic
+SPD-
+atlas#
+vanilevsky
+Vladimir
