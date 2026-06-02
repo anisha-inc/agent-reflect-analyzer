@@ -1,0 +1,13 @@
+{% for session in sessions %}=== SESSION {{ session.sessionId }} dev={{ dev_id }} proj={{ proj_id }} started={{ session.started_at }} ===
+
+{% for turn in session.turns %}[turn {{ loop.index0 }}]
+USER: {{ turn.user_text or "<empty>" }}
+
+{% if turn.thinking %}ASSISTANT THINKING ({{ turn.thinking|length }}×): {{ turn.thinking|join(" --- ") }}
+{% endif %}{% if turn.assistant_text %}ASSISTANT TEXT: {{ turn.assistant_text }}
+{% endif %}{% for tu in turn.tool_uses %}TOOL_USE [{{ loop.index0 }}] {{ tu.name }}: {{ tu.input }}
+{% endfor %}{% for tr in turn.tool_results %}TOOL_RESULT [{{ loop.index0 }}] ok={{ "false" if tr.is_error else "true" }}: {{ tr.content }}
+{% endfor %}
+{% endfor %}=== END SESSION {{ session.sessionId }} total_tokens={{ session.total_tokens }} errors={{ session.errors }} ===
+
+{% endfor %}
