@@ -1,0 +1,184 @@
+name: Release · Auto
+
+# Auto-release on push to main: detect the bump from merged-PR / commit titles,
+# compute the next semver, and cut a GitHub release. The FIRST release (v1.0.0)
+# is created manually; this workflow stays idle until a version tag exists
+# (see the "Check for new commits" guard), then auto-bumps from there.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: Release type
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag
+        id: get_tag
+        shell: bash
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || echo "v0.0.0")
+          echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+          echo "Latest tag: $LATEST_TAG"
+
+      - name: Check for new commits
+        id: check
+        shell: bash
+        env:
+          LATEST_TAG: ${{ steps.get_tag.outputs.latest_tag }}
+        run: |
+          if [ "$LATEST_TAG" = "v0.0.0" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No version tag yet — the first release is created manually; auto-release stays idle."
+            exit 0
+          fi
+          COUNT=$(git rev-list "${LATEST_TAG}..HEAD" --count 2>/dev/null || echo "1")
+          if [ "$COUNT" -eq "0" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No new commits since $LATEST_TAG"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Found $COUNT new commits"
+          fi
+
+      - name: Get merged PRs
+        if: steps.check.outputs.skip != 'true'
+        id: prs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST_TAG: ${{ steps.get_tag.outputs.latest_tag }}
+        run: |
+          if [ "$LATEST_TAG" == "v0.0.0" ]; then
+            TAG_DATE="2000-01-01T00:00:00Z"
+          else
+            TAG_DATE=$(git log -1 --format=%aI "$LATEST_TAG" 2>/dev/null)
+          fi
+
+          echo "Looking for PRs merged after: $TAG_DATE"
+
+          gh pr list \
+            --state merged \
+            --base main \
+            --json number,title,body,mergedAt,author \
+            --limit 100 \
+            --repo "$GITHUB_REPOSITORY" > /tmp/prs_raw.json 2>/dev/null || echo "[]" > /tmp/prs_raw.json
+
+          jq -r --arg date "$TAG_DATE" --arg repo "$GITHUB_REPOSITORY" '
+            .[] | select(.mergedAt >= $date) |
+            "- [#\(.number)](https://github.com/\($repo)/pull/\(.number)) \(.title) by [@\(.author.login)](https://github.com/\(.author.login))"
+          ' /tmp/prs_raw.json > /tmp/prs.txt
+
+          if [ ! -s /tmp/prs.txt ]; then
+            echo "No merged PRs found. Falling back to commit log."
+            RANGE="${LATEST_TAG}..HEAD"
+            [ "$LATEST_TAG" == "v0.0.0" ] && RANGE="HEAD"
+
+            git log --format="- %h %s by %an" "$RANGE" --no-merges | head -50 > /tmp/prs.txt
+            git log --format="%s" "$RANGE" --no-merges | head -50 > /tmp/pr_titles.txt
+
+            if [ ! -s /tmp/prs.txt ]; then
+              echo "- Initial release" > /tmp/prs.txt
+            fi
+          else
+            jq -r --arg date "$TAG_DATE" '
+              .[] | select(.mergedAt >= $date) | .title
+            ' /tmp/prs_raw.json > /tmp/pr_titles.txt
+          fi
+
+          echo "Found changes:"
+          cat /tmp/prs.txt
+
+      - name: Detect release type from PRs
+        if: steps.check.outputs.skip != 'true'
+        id: detect_type
+        shell: bash
+        env:
+          INPUT_TYPE: ${{ inputs.release_type || 'auto' }}
+        run: |
+          if [ "$INPUT_TYPE" != "auto" ]; then
+            echo "release_type=$INPUT_TYPE" >> "$GITHUB_OUTPUT"
+            echo "Using specified release type: $INPUT_TYPE"
+            exit 0
+          fi
+
+          if grep -qiE "^feat(\(.*\))?:" /tmp/pr_titles.txt 2>/dev/null; then
+            TYPE="minor"
+          elif grep -qiE "^fix(\(.*\))?:" /tmp/pr_titles.txt 2>/dev/null; then
+            TYPE="patch"
+          else
+            TYPE="patch"
+          fi
+
+          echo "release_type=$TYPE" >> "$GITHUB_OUTPUT"
+          echo "Auto-detected release type: $TYPE"
+
+      - name: Calculate next version
+        if: steps.check.outputs.skip != 'true'
+        id: version
+        shell: bash
+        env:
+          LATEST_TAG: ${{ steps.get_tag.outputs.latest_tag }}
+          TYPE: ${{ steps.detect_type.outputs.release_type }}
+        run: |
+          VERSION=${LATEST_TAG#v}
+          IFS='.' read -r X Y Z <<< "$VERSION"
+
+          case "$TYPE" in
+            major) X=$((X+1)); Y=0; Z=0 ;;
+            minor) Y=$((Y+1)); Z=0 ;;
+            patch) Z=$((Z+1)) ;;
+          esac
+
+          NEW_VERSION="$X.$Y.$Z"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "New version: $NEW_VERSION (type: $TYPE)"
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.skip != 'true'
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.new_version }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          {
+            echo "Changes in this release:"
+            echo ""
+            cat /tmp/prs.txt
+          } > /tmp/release_body.txt
+
+          RELEASE_URL=$(gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes-file /tmp/release_body.txt \
+            --target "$COMMIT_SHA" \
+            --repo "$GITHUB_REPOSITORY")
+
+          echo "url=$RELEASE_URL" >> "$GITHUB_OUTPUT"
+          echo "Created release: v${VERSION} — $RELEASE_URL"

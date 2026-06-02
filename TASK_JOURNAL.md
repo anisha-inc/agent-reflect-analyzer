@@ -31,7 +31,7 @@ tag commit and a clean-shell smoke run passing.
 - [x] Step 7: pytest-socket + STYLE.md + renovate.json
 - [x] Step 8: Reusable workflow + vendored github-app-token (sync-drift workflow → Follow-ups)
 - [x] Step 9: Slim CI (py-tests + ruff + scrub-test + subprocess-guard)
-- [ ] Step 10: Lift release workflow AS-IS
+- [x] Step 10: Lift release workflow AS-IS (+ bootstrap guard: idle until a tag exists)
 - [ ] Step 11: LICENSE (MIT) + README
 - [ ] Step 12: Final verification + initial-release PR + tag `v1.0.0`
 
@@ -76,9 +76,9 @@ tag commit and a clean-shell smoke run passing.
 
 ## Next Action
 
-Step 10 — lift `.github/workflows/release.yml` from the internal source AS-IS
-(generic `$GITHUB_REPOSITORY` refs); actionlint it. Then Step 11 (LICENSE +
-README, bump version to 1.0.0) and Step 12 (verify + PR + tag).
+Step 11 — LICENSE (MIT, Anisha Inc., 2026) + README (per plan template), and
+bump `pyproject` version + `analyzer.__version__` to 1.0.0. Then Step 12:
+actionlint all workflows + uv build wheel check + /pr + (CONFIRM) tag v1.0.0.
 
 ## Follow-ups
 
