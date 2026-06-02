@@ -27,6 +27,7 @@ def _cluster_count(n_summaries: int) -> int:
 def _embed(summaries: list[HaikuSummary]) -> Any:
     """Compute sentence embeddings using all-mpnet-base-v2."""
     from sentence_transformers import SentenceTransformer
+
     model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
     texts = [
         f"{s.summary} | intent:{s.user_intent_category} | "
@@ -38,6 +39,7 @@ def _embed(summaries: list[HaikuSummary]) -> Any:
 
 def _kmeans(embeddings, k: int) -> list[int]:
     from sklearn.cluster import KMeans
+
     km = KMeans(n_clusters=k, n_init=10, random_state=42)
     return km.fit_predict(embeddings).tolist()
 
@@ -60,6 +62,7 @@ async def _name_cluster(
     raw = "\n".join(b.text for b in msg.content if hasattr(b, "text") and b.text)
     payload = prompt_loader.extract_json(raw)
     import json
+
     out = json.loads(payload)
     return {
         "name": out.get("name", "Unnamed cluster")[:60],
@@ -71,7 +74,9 @@ async def _name_all_async(
     grouped: list[list[HaikuSummary]], model: str, concurrency: int
 ) -> list[dict[str, str]]:
     from anthropic import AsyncAnthropic
+
     from .. import auth as _auth
+
     api_key = _auth.read_anthropic_api_key()
     # Explicit api_key — see mapreduce._map_rest_async for rationale.
     client = AsyncAnthropic(api_key=api_key) if api_key else AsyncAnthropic()
@@ -108,7 +113,7 @@ def cluster_summaries(
         return []
 
     grouped: list[list[HaikuSummary]] = [[] for _ in range(k)]
-    for s, lab in zip(summaries, labels):
+    for s, lab in zip(summaries, labels, strict=False):
         grouped[lab].append(s)
     grouped = [g for g in grouped if len(g) >= min_freq]
 
@@ -129,7 +134,7 @@ def cluster_summaries(
             frequency=len(g),
             session_ids=[s.session_id for s in g],
         )
-        for g, name in zip(grouped, names)
+        for g, name in zip(grouped, names, strict=False)
     ]
     record.cluster_count = len(findings)
     record.cluster_wall_s = round(time.time() - started, 2)

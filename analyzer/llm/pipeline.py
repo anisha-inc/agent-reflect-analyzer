@@ -30,8 +30,9 @@ def _merge(opus: OpusFindings, clusters: list[ClusterFinding]) -> list[Candidate
     return list(seen.values())
 
 
-def _filter_min_freq(candidates: list[Candidate], min_opus_freq: int = 2,
-                     min_cluster_freq: int = 3) -> list[Candidate]:
+def _filter_min_freq(
+    candidates: list[Candidate], min_opus_freq: int = 2, min_cluster_freq: int = 3
+) -> list[Candidate]:
     out: list[Candidate] = []
     for c in candidates:
         threshold = min_cluster_freq if c.source == "cluster" else min_opus_freq
@@ -76,8 +77,11 @@ def run(
         opus_findings = flatten.analyze_top_k(
             sessions=top,
             events_by_session=events_by_session,
-            dev_id=dev_id, proj_id=proj_id, since=since,
-            model=model_top_k, record=record,
+            dev_id=dev_id,
+            proj_id=proj_id,
+            since=since,
+            model=model_top_k,
+            record=record,
             api_key_fallback=api_key_fallback,
         )
     else:
@@ -86,16 +90,23 @@ def run(
     haiku_summaries: list[HaikuSummary] = []
     if strategy in ("hybrid", "map-reduce-B", "cluster-D"):
         haiku_summaries = mapreduce.map_rest(
-            rest=rest, events_by_session=events_by_session,
-            dev_id=dev_id, proj_id=proj_id, model=model_rest,
-            concurrency=concurrency, record=record,
+            rest=rest,
+            events_by_session=events_by_session,
+            dev_id=dev_id,
+            proj_id=proj_id,
+            model=model_rest,
+            concurrency=concurrency,
+            record=record,
         )
 
     clusters: list[ClusterFinding] = []
     if cluster and (strategy in ("hybrid", "cluster-D")) and haiku_summaries:
         clusters = clio.cluster_summaries(
-            summaries=haiku_summaries, min_freq=3,
-            model=model_rest, concurrency=concurrency, record=record,
+            summaries=haiku_summaries,
+            min_freq=3,
+            model=model_rest,
+            concurrency=concurrency,
+            record=record,
         )
 
     merged = _merge(opus_findings, clusters)

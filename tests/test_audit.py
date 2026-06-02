@@ -26,6 +26,7 @@ def test_finalize_sets_total_wall_s():
 
 def test_write_audit_writes_json_to_tmp(tmp_path, monkeypatch):
     from analyzer import config
+
     monkeypatch.setattr(config, "AUDIT_DIR", tmp_path / "audit")
     r = audit.RunRecord(since="7d", limit=10, sessions_analyzed=3)
     path = audit.write_audit(r)

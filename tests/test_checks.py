@@ -25,8 +25,14 @@ def test_run_all_emits_8_probes():
     assert len(results) == 8
     ids = [r["id"] for r in results]
     assert set(ids) == {
-        "hmac_1p", "hmac_duckdb_smoke", "gh_cli", "app_token",
-        "recent_ships", "anthropic_key", "claude_cli", "python_deps",
+        "hmac_1p",
+        "hmac_duckdb_smoke",
+        "gh_cli",
+        "app_token",
+        "recent_ships",
+        "anthropic_key",
+        "claude_cli",
+        "python_deps",
     }
 
 

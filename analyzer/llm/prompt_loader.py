@@ -23,7 +23,7 @@ def _env() -> Environment:
         trim_blocks=True,
         lstrip_blocks=True,
         keep_trailing_newline=False,
-        autoescape=False,
+        autoescape=False,  # noqa: S701 — markdown/text prompt output, no HTML/XSS surface
     )
 
 

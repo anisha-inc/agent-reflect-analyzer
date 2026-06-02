@@ -46,33 +46,82 @@ def _emit_check(results: list[checks.CheckResult], as_json: bool) -> int:
 
 @click.command()
 @click.option("--check", "check_mode", is_flag=True, help="Run prerequisite probes and exit.")
-@click.option("--since", default=config.DEFAULT_SINCE, show_default=True,
-              help="Window for session selection, e.g. 7d, 14d, 30d.")
-@click.option("--limit", type=int, default=config.DEFAULT_LIMIT, show_default=True,
-              help="Hard cap on session count after ranking.")
-@click.option("--repo", default=None,
-              help="owner/name for issue emit. If --emit-issues without --repo, autodetect via gh.")
-@click.option("--emit-issues/--dry-run", default=False,
-              help="Default --dry-run. With --emit-issues actually open GitHub issues.")
-@click.option("--top-k", type=int, default=config.DEFAULT_TOP_K, show_default=True,
-              help="Number of sessions taken full-flatten for Opus stage [3].")
-@click.option("--strategy", type=click.Choice(["hybrid", "flatten-A", "map-reduce-B", "cluster-D"]),
-              default="hybrid", show_default=True,
-              help="Pipeline strategy. hybrid = Opus top-K + Haiku map-reduce (+optional clustering).")
-@click.option("--model-top-k", type=click.Choice(["opus", "sonnet"]), default="opus",
-              show_default=True, help="Model for stage [3].")
-@click.option("--model-rest", type=click.Choice(["haiku", "sonnet"]), default="haiku",
-              show_default=True, help="Model for stage [4]/[5].")
-@click.option("--concurrency", type=int, default=config.DEFAULT_CONCURRENCY, show_default=True,
-              help="Max concurrent API calls in Stage [4]/[5].")
-@click.option("--cluster/--no-cluster", default=False, show_default=True,
-              help="Enable OpenClio clustering stage [5]. Off by default for --since ≤14d.")
-@click.option("--include-closed-since", default=None,
-              help="Include closed improvement-by-agent issues from N days ago in dedup corpus.")
-@click.option("--api-key-fallback/--no-api-key-fallback", default=False, show_default=True,
-              help="If `claude -p` Opus call hits subscription quota, retry with ANTHROPIC_API_KEY.")
-@click.option("--json", "json_out", is_flag=True,
-              help="Emit final summary as JSON to stdout.")
+@click.option(
+    "--since",
+    default=config.DEFAULT_SINCE,
+    show_default=True,
+    help="Window for session selection, e.g. 7d, 14d, 30d.",
+)
+@click.option(
+    "--limit",
+    type=int,
+    default=config.DEFAULT_LIMIT,
+    show_default=True,
+    help="Hard cap on session count after ranking.",
+)
+@click.option(
+    "--repo",
+    default=None,
+    help="owner/name for issue emit. If --emit-issues without --repo, autodetect via gh.",
+)
+@click.option(
+    "--emit-issues/--dry-run",
+    default=False,
+    help="Default --dry-run. With --emit-issues actually open GitHub issues.",
+)
+@click.option(
+    "--top-k",
+    type=int,
+    default=config.DEFAULT_TOP_K,
+    show_default=True,
+    help="Number of sessions taken full-flatten for Opus stage [3].",
+)
+@click.option(
+    "--strategy",
+    type=click.Choice(["hybrid", "flatten-A", "map-reduce-B", "cluster-D"]),
+    default="hybrid",
+    show_default=True,
+    help="Pipeline strategy. hybrid = Opus top-K + Haiku map-reduce (+optional clustering).",
+)
+@click.option(
+    "--model-top-k",
+    type=click.Choice(["opus", "sonnet"]),
+    default="opus",
+    show_default=True,
+    help="Model for stage [3].",
+)
+@click.option(
+    "--model-rest",
+    type=click.Choice(["haiku", "sonnet"]),
+    default="haiku",
+    show_default=True,
+    help="Model for stage [4]/[5].",
+)
+@click.option(
+    "--concurrency",
+    type=int,
+    default=config.DEFAULT_CONCURRENCY,
+    show_default=True,
+    help="Max concurrent API calls in Stage [4]/[5].",
+)
+@click.option(
+    "--cluster/--no-cluster",
+    default=False,
+    show_default=True,
+    help="Enable OpenClio clustering stage [5]. Off by default for --since ≤14d.",
+)
+@click.option(
+    "--include-closed-since",
+    default=None,
+    help="Include closed improvement-by-agent issues from N days ago in dedup corpus.",
+)
+@click.option(
+    "--api-key-fallback/--no-api-key-fallback",
+    default=False,
+    show_default=True,
+    help="If `claude -p` Opus call hits subscription quota, retry with ANTHROPIC_API_KEY.",
+)
+@click.option("--json", "json_out", is_flag=True, help="Emit final summary as JSON to stdout.")
 @click.option("--verbose", is_flag=True, help="Verbose stage logging.")
 def main(
     check_mode: bool,
@@ -104,7 +153,10 @@ def main(
     from .run import run_pipeline  # noqa: WPS433
 
     record = audit.RunRecord(
-        since=since, limit=limit, top_k=top_k, strategy=strategy,
+        since=since,
+        limit=limit,
+        top_k=top_k,
+        strategy=strategy,
     )
     summary = run_pipeline(
         record=record,

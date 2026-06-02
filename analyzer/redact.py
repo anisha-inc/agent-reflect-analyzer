@@ -18,19 +18,28 @@ from .llm.schemas import Candidate
 
 def _custom_recognizers():
     from presidio_analyzer import Pattern, PatternRecognizer
+
     return [
-        PatternRecognizer(supported_entity="ANTHROPIC_KEY",
-                          patterns=[Pattern("sk-ant-*", r"sk-ant-[a-zA-Z0-9-_]{30,}", 0.95)]),
-        PatternRecognizer(supported_entity="GH_PAT",
-                          patterns=[Pattern("ghp/gh_pat", r"(ghp|gh_pat|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}", 0.95)]),
-        PatternRecognizer(supported_entity="AWS_KEY",
-                          patterns=[Pattern("aws", r"AKIA[A-Z0-9]{16}", 0.95)]),
-        PatternRecognizer(supported_entity="GCS_HMAC",
-                          patterns=[Pattern("hmac", r"GOOG1E[A-Z0-9]{56,}", 0.95)]),
-        PatternRecognizer(supported_entity="JWT",
-                          patterns=[Pattern("jwt",
-                                            r"eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+",
-                                            0.9)]),
+        PatternRecognizer(
+            supported_entity="ANTHROPIC_KEY",
+            patterns=[Pattern("sk-ant-*", r"sk-ant-[a-zA-Z0-9-_]{30,}", 0.95)],
+        ),
+        PatternRecognizer(
+            supported_entity="GH_PAT",
+            patterns=[
+                Pattern("ghp/gh_pat", r"(ghp|gh_pat|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}", 0.95)
+            ],
+        ),
+        PatternRecognizer(
+            supported_entity="AWS_KEY", patterns=[Pattern("aws", r"AKIA[A-Z0-9]{16}", 0.95)]
+        ),
+        PatternRecognizer(
+            supported_entity="GCS_HMAC", patterns=[Pattern("hmac", r"GOOG1E[A-Z0-9]{56,}", 0.95)]
+        ),
+        PatternRecognizer(
+            supported_entity="JWT",
+            patterns=[Pattern("jwt", r"eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", 0.9)],
+        ),
     ]
 
 
@@ -42,6 +51,7 @@ def _engine() -> tuple[Any, Any]:
     """Build (analyzer, anonymizer) once."""
     from presidio_analyzer import AnalyzerEngine
     from presidio_anonymizer import AnonymizerEngine
+
     analyzer = AnalyzerEngine()
     for r in _custom_recognizers():
         analyzer.registry.add_recognizer(r)

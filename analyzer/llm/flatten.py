@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import os
 import pathlib
-import subprocess
 import tempfile
 import time
 from typing import Any
@@ -24,9 +23,9 @@ from tenacity import (
 )
 
 from .. import audit, config
+from ..subprocess_util import run_external
 from . import prompt_loader
 from .schemas import OpusFindings
-
 
 _TRUNCATE_THINKING = 200
 _TRUNCATE_TOOL_RESULT = 600
@@ -72,10 +71,14 @@ def _turn_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
                             if isinstance(b, dict) and b.get("type") == "tool_result":
                                 payload = b.get("content")
                                 if current is not None:
-                                    current["tool_results"].append({
-                                        "is_error": bool(b.get("is_error")),
-                                        "content": _truncate(_stringify(payload), _TRUNCATE_TOOL_RESULT),
-                                    })
+                                    current["tool_results"].append(
+                                        {
+                                            "is_error": bool(b.get("is_error")),
+                                            "content": _truncate(
+                                                _stringify(payload), _TRUNCATE_TOOL_RESULT
+                                            ),
+                                        }
+                                    )
                         # If this event is purely tool_result, do not start a new turn.
                         if not user_text:
                             continue
@@ -106,12 +109,16 @@ def _turn_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 elif btype == "text":
                     txt = b.get("text", "")
                     if txt:
-                        current["assistant_text"] = (current["assistant_text"] + "\n" + txt).strip()[:1500]
+                        current["assistant_text"] = (
+                            current["assistant_text"] + "\n" + txt
+                        ).strip()[:1500]
                 elif btype == "tool_use":
-                    current["tool_uses"].append({
-                        "name": b.get("name", "?"),
-                        "input": _truncate(_stringify(b.get("input")), _TRUNCATE_TOOL_INPUT),
-                    })
+                    current["tool_uses"].append(
+                        {
+                            "name": b.get("name", "?"),
+                            "input": _truncate(_stringify(b.get("input")), _TRUNCATE_TOOL_INPUT),
+                        }
+                    )
 
     if current is not None:
         turns.append(current)
@@ -140,8 +147,8 @@ def _enrich_session_for_prompt(
 ) -> dict[str, Any]:
     enriched = dict(session)
     enriched["turns"] = _turn_from_events(events)
-    enriched["total_tokens"] = (
-        session.get("max_input_tokens", 0) + session.get("total_output_tokens", 0)
+    enriched["total_tokens"] = session.get("max_input_tokens", 0) + session.get(
+        "total_output_tokens", 0
     )
     return enriched
 
@@ -172,7 +179,8 @@ def _shrink_session(s: dict[str, Any]) -> dict[str, Any]:
             {**tu, "input": _truncate(tu.get("input", ""), 200)} for tu in t.get("tool_uses", [])
         ]
         copy["tool_results"] = [
-            {**tr, "content": _truncate(tr.get("content", ""), 200)} for tr in t.get("tool_results", [])
+            {**tr, "content": _truncate(tr.get("content", ""), 200)}
+            for tr in t.get("tool_results", [])
         ]
         shrunk_turns.append(copy)
     out = dict(s)
@@ -194,7 +202,9 @@ class OpusInvocationError(RuntimeError):
     retry=retry_if_exception_type(OpusInvocationError),
     reraise=True,
 )
-def _call_claude_subprocess(system_prompt: str, user_prompt: str, model: str, timeout_s: int = 240) -> str:
+def _call_claude_subprocess(
+    system_prompt: str, user_prompt: str, model: str, timeout_s: int = 180
+) -> str:
     """Invoke `claude -p` subprocess for subscription-billed Opus call.
 
     Billing path is enforced via explicit env construction:
@@ -238,26 +248,32 @@ def _call_claude_subprocess(system_prompt: str, user_prompt: str, model: str, ti
     isolated_cwd = tempfile.mkdtemp(prefix="agent-reflect-claude-p-")
     try:
         with prompt_file.open("rb") as stdin_fp:
-            res = subprocess.run(
+            res = run_external(
                 [
-                    "claude", "-p",
-                    "--model", model,
-                    "--system-prompt", system_prompt,
-                    "--tools", "",
+                    "claude",
+                    "-p",
+                    "--model",
+                    model,
+                    "--system-prompt",
+                    system_prompt,
+                    "--tools",
+                    "",
                     "--disable-slash-commands",
                     "--no-session-persistence",
-                    "--output-format", "json",
-                    "--permission-mode", "bypassPermissions",
+                    "--output-format",
+                    "json",
+                    "--permission-mode",
+                    "bypassPermissions",
                 ],
+                timeout=timeout_s,
                 env=subprocess_env,
                 cwd=isolated_cwd,
                 stdin=stdin_fp,
-                capture_output=True,
-                text=True,
-                timeout=timeout_s,
+                check=False,
             )
-    except subprocess.TimeoutExpired as e:
-        raise OpusInvocationError(f"claude -p timeout after {timeout_s}s") from e
+    except RuntimeError as e:
+        # run_external raises on timeout or a missing `claude` executable.
+        raise OpusInvocationError(f"claude -p invocation failed: {e}") from e
     finally:
         prompt_file.unlink(missing_ok=True)
         try:
@@ -278,7 +294,8 @@ def _call_claude_subprocess(system_prompt: str, user_prompt: str, model: str, ti
                 is_quota=True,
             )
         raise OpusInvocationError(
-            f"claude -p exit {res.returncode}: stderr={res.stderr[:200]!r} stdout={res.stdout[:400]!r}"
+            f"claude -p exit {res.returncode}: "
+            f"stderr={res.stderr[:200]!r} stdout={res.stdout[:400]!r}"
         )
 
     # Parse the JSON envelope from --output-format json.
@@ -312,7 +329,9 @@ def _call_anthropic_fallback(
     process may have ANTHROPIC_API_KEY unset or different from 1P's value).
     """
     from anthropic import Anthropic, APITimeoutError
+
     from .. import auth as _auth
+
     api_key = _auth.read_anthropic_api_key()
     if not api_key:
         raise OpusInvocationError("anthropic fallback: ANTHROPIC_API_KEY unavailable")
@@ -346,8 +365,7 @@ def analyze_top_k(
         return OpusFindings(findings=[])
 
     enriched = [
-        _enrich_session_for_prompt(s, events_by_session.get(s["sessionId"], []))
-        for s in sessions
+        _enrich_session_for_prompt(s, events_by_session.get(s["sessionId"], [])) for s in sessions
     ]
     system_prompt = prompt_loader.render(
         "top_k_opus_system.j2",
@@ -365,7 +383,7 @@ def analyze_top_k(
     while len(user_prompt.encode("utf-8")) > _PROMPT_BUDGET_BYTES and len(rendered_sessions) > 1:
         dropped = rendered_sessions.pop()
         record.warnings.append(
-            f"opus_prompt_overflow_drop sid={dropped.get('sessionId','?')[:8]} "
+            f"opus_prompt_overflow_drop sid={dropped.get('sessionId', '?')[:8]} "
             f"size={len(user_prompt):,}B"
         )
         user_prompt = _render_user_prompt(rendered_sessions, dev_id, proj_id)
@@ -380,11 +398,9 @@ def analyze_top_k(
         # but Opus still gets the start of the flattened sessions and the
         # system-prompt-defined schema instructions are sufficient to extract
         # patterns from a partial sample.
-        truncated_bytes = user_prompt.encode("utf-8")[: _PROMPT_BUDGET_BYTES]
+        truncated_bytes = user_prompt.encode("utf-8")[:_PROMPT_BUDGET_BYTES]
         user_prompt = truncated_bytes.decode("utf-8", errors="ignore") + "\n[...truncated]\n"
-        record.warnings.append(
-            f"opus_prompt_hard_truncated size={len(user_prompt):,}B"
-        )
+        record.warnings.append(f"opus_prompt_hard_truncated size={len(user_prompt):,}B")
 
     started = time.time()
     raw: str = ""
@@ -397,7 +413,9 @@ def analyze_top_k(
         if e.is_quota and api_key_fallback and os.environ.get("ANTHROPIC_API_KEY"):
             record.warnings.append(f"opus_subscription_quota_exhausted_falling_back: {e}")
             try:
-                raw = _call_anthropic_fallback(system_prompt, user_prompt, model=_resolve_model(model))
+                raw = _call_anthropic_fallback(
+                    system_prompt, user_prompt, model=_resolve_model(model)
+                )
             except OpusInvocationError as e2:
                 record.warnings.append(f"opus_fallback_failed: {e2}")
                 return OpusFindings(findings=[])

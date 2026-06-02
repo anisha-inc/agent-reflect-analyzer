@@ -57,9 +57,12 @@ def test_aggregate_session_counts_tool_uses_and_errors():
         {
             "type": "user",
             "timestamp": "2026-05-25T12:17:07.000Z",
-            "message": {"role": "user", "content": [
-                {"type": "tool_result", "is_error": True, "content": "ls: command failed"},
-            ]},
+            "message": {
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "is_error": True, "content": "ls: command failed"},
+                ],
+            },
         },
     ]
     agg = duckdb_query._aggregate_session(events)
@@ -74,10 +77,8 @@ def test_aggregate_session_counts_tool_uses_and_errors():
 
 def test_session_first_user_prompt_picks_first_non_meta():
     events = [
-        {"type": "user", "isMeta": True,
-         "message": {"role": "user", "content": "<caveat>"}},
-        {"type": "user",
-         "message": {"role": "user", "content": "actual prompt"}},
+        {"type": "user", "isMeta": True, "message": {"role": "user", "content": "<caveat>"}},
+        {"type": "user", "message": {"role": "user", "content": "actual prompt"}},
     ]
     assert duckdb_query._session_first_user_prompt(events) == "actual prompt"
 
@@ -85,6 +86,7 @@ def test_session_first_user_prompt_picks_first_non_meta():
 def test_load_sessions_filters_reflect_sessions():
     """End-to-end mock test of load_sessions — supply a fake connection that
     returns 2 sessions, one of which is a /reflect-agent-sessions invocation."""
+
     class FakeCursor:
         description = [("type",), ("sessionId",), ("timestamp",), ("message",), ("isMeta",)]
 
@@ -96,15 +98,31 @@ def test_load_sessions_filters_reflect_sessions():
 
         def fetchall(self):
             return [
-                ("user", "sess-A", "2026-05-25T10:00:00Z",
-                 {"role": "user", "content": "/reflect-agent-sessions --since 7d"}, False),
-                ("user", "sess-B", "2026-05-25T11:00:00Z",
-                 {"role": "user", "content": "fix the bug in foo.py"}, False),
-                ("assistant", "sess-B", "2026-05-25T11:00:05Z",
-                 {"role": "assistant",
-                  "content": [{"type": "tool_use", "name": "Read", "input": {}}],
-                  "usage": {"input_tokens": 50, "output_tokens": 10}},
-                 False),
+                (
+                    "user",
+                    "sess-A",
+                    "2026-05-25T10:00:00Z",
+                    {"role": "user", "content": "/reflect-agent-sessions --since 7d"},
+                    False,
+                ),
+                (
+                    "user",
+                    "sess-B",
+                    "2026-05-25T11:00:00Z",
+                    {"role": "user", "content": "fix the bug in foo.py"},
+                    False,
+                ),
+                (
+                    "assistant",
+                    "sess-B",
+                    "2026-05-25T11:00:05Z",
+                    {
+                        "role": "assistant",
+                        "content": [{"type": "tool_use", "name": "Read", "input": {}}],
+                        "usage": {"input_tokens": 50, "output_tokens": 10},
+                    },
+                    False,
+                ),
             ]
 
     sessions = duckdb_query.load_sessions(FakeCon(), since="7d", limit=10)

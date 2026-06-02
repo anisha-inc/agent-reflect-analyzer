@@ -31,9 +31,14 @@ def test_is_reflect_session_matches_slash_command():
 def test_detect_retry_loops_finds_repeated_actions():
     same_input = {"command": "ls foo"}
     events = [
-        {"type": "assistant", "message": {"content": [
-            {"type": "tool_use", "name": "Bash", "input": same_input},
-        ]}}
+        {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "tool_use", "name": "Bash", "input": same_input},
+                ]
+            },
+        }
         for _ in range(5)
     ]
     assert metrics.detect_retry_loops(events, window=4) >= 1
@@ -41,9 +46,14 @@ def test_detect_retry_loops_finds_repeated_actions():
 
 def test_detect_retry_loops_returns_zero_for_diverse():
     events = [
-        {"type": "assistant", "message": {"content": [
-            {"type": "tool_use", "name": "Bash", "input": {"command": f"cmd-{i}"}},
-        ]}}
+        {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "tool_use", "name": "Bash", "input": {"command": f"cmd-{i}"}},
+                ]
+            },
+        }
         for i in range(5)
     ]
     assert metrics.detect_retry_loops(events) == 0
@@ -58,9 +68,14 @@ def test_derive_outcome_end_turn():
 
 
 def test_derive_outcome_errored_out():
-    err = {"type": "user", "message": {"content": [
-        {"type": "tool_result", "is_error": True, "content": "oops"},
-    ]}}
+    err = {
+        "type": "user",
+        "message": {
+            "content": [
+                {"type": "tool_result", "is_error": True, "content": "oops"},
+            ]
+        },
+    }
     events = [err, err, err]
     assert metrics.derive_outcome(events) == "errored_out"
 

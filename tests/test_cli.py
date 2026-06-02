@@ -13,9 +13,20 @@ from analyzer import cli
 def test_help_lists_all_flags():
     result = CliRunner().invoke(cli.main, ["--help"])
     assert result.exit_code == 0
-    for flag in ("--check", "--since", "--limit", "--repo", "--emit-issues",
-                 "--top-k", "--strategy", "--cluster", "--include-closed-since",
-                 "--api-key-fallback", "--json", "--verbose"):
+    for flag in (
+        "--check",
+        "--since",
+        "--limit",
+        "--repo",
+        "--emit-issues",
+        "--top-k",
+        "--strategy",
+        "--cluster",
+        "--include-closed-since",
+        "--api-key-fallback",
+        "--json",
+        "--verbose",
+    ):
         assert flag in result.output, f"--help missing {flag}"
 
 
@@ -51,17 +62,19 @@ def test_check_human_exits_zero_when_all_pass():
 
 
 def test_summary_table_renders_known_keys():
-    table = cli._summary_table({
-        "sessions_analyzed": 5,
-        "candidates_total": 3,
-        "candidates_after_dedup": 2,
-        "candidates_after_redact": 2,
-        "issues_emitted": 1,
-        "issue_urls": ["https://github.com/a/b/issues/1"],
-        "total_wall_s": 12.3,
-        "est_cost_usd": 0.05,
-        "audit_log": "/tmp/foo",
-    })
+    table = cli._summary_table(
+        {
+            "sessions_analyzed": 5,
+            "candidates_total": 3,
+            "candidates_after_dedup": 2,
+            "candidates_after_redact": 2,
+            "issues_emitted": 1,
+            "issue_urls": ["https://github.com/a/b/issues/1"],
+            "total_wall_s": 12.3,
+            "est_cost_usd": 0.05,
+            "audit_log": "/tmp/foo",
+        }
+    )
     assert "sessions analyzed" in table
     assert "5" in table
     assert "/tmp/foo" in table

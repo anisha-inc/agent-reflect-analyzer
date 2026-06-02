@@ -25,7 +25,7 @@ tag commit and a clean-shell smoke run passing.
 - [x] Step 1: Bootstrap worktree + verify target repo is public
 - [x] Step 2: Copy analyzer package + tests + templates (promote templates into package)
 - [x] Step 3: Pydantic Settings v2 strict env loader (`AGENT_REFLECT_*`, no defaults) + cross-cutting
-- [ ] Step 4: `subprocess_util.run_external()` wrapper + migrate call sites + ruff guard
+- [x] Step 4: `subprocess_util.run_external()` wrapper + migrate call sites + ruff guard
 - [ ] Step 5: Audit stdout fallback when `CLAUDE_PLUGIN_DATA` unset
 - [ ] Step 6: scrub-test pre-commit + forbidden-patterns + source cleanup pass
 - [ ] Step 7: pytest-socket + STYLE.md + renovate.json
@@ -54,13 +54,19 @@ tag commit and a clean-shell smoke run passing.
   `ANISHA_OP_SVC_TOKEN` both legitimately contain it. Genuinely-internal
   identifiers are scrubbed by hand as files are touched and by the Step 6 list.
 
+- `run_external` gained `check=False` (returns the CompletedProcess) and `cwd`
+  beyond the plan's signature, so `llm/flatten` can keep inspecting `claude -p`
+  exit/stderr for quota detection without a bare `subprocess` import.
+- Ran `ruff format` once over `analyzer/`+`tests/` to establish the formatting
+  baseline and resolve `E501` in lifted code; `tests/**` ignores all `S` rules
+  (fixtures carry dummy tokens/temp paths/subprocess mocks).
+
 ## Dead Ends
 
 ## Next Action
 
-Step 4 — add `analyzer/subprocess_util.run_external()` and migrate the bare
-`subprocess` call sites (`auth`, `issues`, `dedup`, `duckdb_query`,
-`llm/flatten`), add the ruff config + per-file-ignores, and update
-`test_auth.py` to mock the wrapper.
+Step 5 — `analyzer/audit.py` `write_audit()` falls back to `sys.stdout` (returns
+None) when `CLAUDE_PLUGIN_DATA` is unset; `cli.py` prints `"stdout"` in the
+summary; add a capsys test in `tests/test_audit.py`.
 
 ## Follow-ups

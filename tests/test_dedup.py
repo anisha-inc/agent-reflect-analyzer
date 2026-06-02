@@ -8,8 +8,11 @@ from analyzer.llm.schemas import Candidate
 
 def _cand(pid: str, title: str, symptom: str) -> Candidate:
     return Candidate(
-        source="opus_top_k", pattern_id=pid, title=title,
-        symptom=symptom, proposed_fix="fix",
+        source="opus_top_k",
+        pattern_id=pid,
+        title=title,
+        symptom=symptom,
+        proposed_fix="fix",
     )
 
 
@@ -46,16 +49,14 @@ def test_dedup_fallback_drops_obvious_duplicate():
 
 def test_dedup_fallback_drops_when_pattern_id_in_title():
     candidates = [_cand("bash-001", "Some title", "sym")]
-    existing = [{"title": "Patch for bash-001 already shipped",
-                 "body": ""}]
+    existing = [{"title": "Patch for bash-001 already shipped", "body": ""}]
     kept = dedup.dedup_candidates(candidates, existing, force_fallback=True)
     assert kept == []
 
 
 def test_dedup_fallback_drops_when_two_tokens_overlap():
     candidates = [_cand("x", "Hook violates plugin contract sometimes", "sym")]
-    existing = [{"title": "Plugin contract violation",
-                 "body": ""}]
+    existing = [{"title": "Plugin contract violation", "body": ""}]
     kept = dedup.dedup_candidates(candidates, existing, force_fallback=True)
     # "plugin" + "contract" overlap (>3 chars each) — dropped.
     assert kept == []

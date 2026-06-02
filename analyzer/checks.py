@@ -14,7 +14,6 @@ from __future__ import annotations
 import importlib
 import os
 import shutil
-import subprocess
 import sys
 from typing import Any
 
@@ -22,6 +21,7 @@ from pydantic import ValidationError
 
 from . import config, identity
 from .config import Settings
+from .subprocess_util import run_external
 
 CheckResult = dict[str, Any]
 
@@ -49,11 +49,9 @@ def _op_read(ref: str) -> str | None:
         return None
     env = {**os.environ, "OP_SERVICE_ACCOUNT_TOKEN": token}
     try:
-        out = subprocess.check_output(
-            ["op", "read", ref], env=env, text=True, stderr=subprocess.DEVNULL, timeout=10
-        ).strip()
+        out = run_external(["op", "read", ref], timeout=10, env=env, redact_argv_log=True).strip()
         return out or None
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+    except RuntimeError:
         return None
 
 
@@ -64,7 +62,9 @@ def check_hmac_1p() -> CheckResult:
     val = _op_read(settings.hmac_akid_ref)
     if val is None:
         return _result(
-            "hmac_1p", "secrets", False,
+            "hmac_1p",
+            "secrets",
+            False,
             "1P reference not readable. Set ANISHA_OP_SVC_TOKEN in env to a "
             "1Password service-account token, then restart the Claude session so "
             "the SessionStart hook picks it up. If `op read` itself fails, the "
@@ -72,7 +72,9 @@ def check_hmac_1p() -> CheckResult:
         )
     if len(val) < 30:
         return _result(
-            "hmac_1p", "secrets", False,
+            "hmac_1p",
+            "secrets",
+            False,
             f"access_key_id length={len(val)} chars — expected ≥30 (likely 60).",
         )
     return _result("hmac_1p", "secrets", True, f"access_key_id length={len(val)} chars OK.")
@@ -82,13 +84,13 @@ def check_gh_cli() -> CheckResult:
     if not shutil.which("gh"):
         return _result("gh_cli", "auth", False, "gh CLI not on PATH (`brew install gh`).")
     try:
-        subprocess.check_output(
-            ["gh", "auth", "status"], stderr=subprocess.STDOUT, text=True, timeout=10
-        )
+        run_external(["gh", "auth", "status"], timeout=10, env={**os.environ})
         return _result("gh_cli", "auth", True, "gh auth status OK.")
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+    except RuntimeError as e:
         return _result(
-            "gh_cli", "auth", False,
+            "gh_cli",
+            "auth",
+            False,
             f"gh auth status failed — run `gh auth login`. ({str(e)[:80]})",
         )
 
@@ -98,20 +100,20 @@ def check_app_token_script() -> CheckResult:
     if plugin_root:
         path = os.path.join(plugin_root, "scripts", "github-app-token")
     else:
-        path = os.path.join(
-            os.path.dirname(__file__), "..", "scripts", "github-app-token"
-        )
+        path = os.path.join(os.path.dirname(__file__), "..", "scripts", "github-app-token")
     if not os.path.isfile(path):
         return _result(
-            "app_token", "auth", False,
+            "app_token",
+            "auth",
+            False,
             f"github-app-token script missing at {path}.",
         )
     if not os.access(path, os.X_OK):
         return _result("app_token", "auth", False, f"{path} not executable (chmod +x).")
     try:
-        subprocess.check_output([path, "--help"], stderr=subprocess.STDOUT, timeout=5)
+        run_external([path, "--help"], timeout=5, env={**os.environ})
         return _result("app_token", "auth", True, "github-app-token --help OK.")
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+    except RuntimeError as e:
         return _result("app_token", "auth", False, f"--help failed: {str(e)[:80]}")
 
 
@@ -121,28 +123,32 @@ def check_recent_ships() -> CheckResult:
         return _result("recent_ships", "data", False, _CONFIG_MISSING_DETAIL)
     if not shutil.which("gsutil"):
         return _result(
-            "recent_ships", "data", False,
+            "recent_ships",
+            "data",
+            False,
             "gsutil missing (`brew install google-cloud-sdk`).",
         )
     try:
         dev = identity.dev_id()
-    except (RuntimeError, subprocess.CalledProcessError):
+    except RuntimeError:
         return _result("recent_ships", "data", False, "git user.email empty — set it.")
     url = f"{settings.gcs_bucket}/{config.GCS_RAW_PREFIX}/dev={dev}/"
     try:
-        out = subprocess.check_output(
-            ["gsutil", "ls", url], stderr=subprocess.STDOUT, text=True, timeout=20
-        )
+        out = run_external(["gsutil", "ls", url], timeout=20, env={**os.environ})
         lines = [ln for ln in out.strip().splitlines() if ln.strip()]
         if not lines:
             return _result(
-                "recent_ships", "data", False,
+                "recent_ships",
+                "data",
+                False,
                 f"No shipped sessions found in {url}.",
             )
         return _result("recent_ships", "data", True, f"{len(lines)} project(s) shipped.")
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+    except RuntimeError as e:
         return _result(
-            "recent_ships", "data", False,
+            "recent_ships",
+            "data",
+            False,
             f"gsutil ls failed: {str(e)[:80]}",
         )
 
@@ -158,11 +164,15 @@ def check_anthropic_key() -> CheckResult:
         if key:
             os.environ["ANTHROPIC_API_KEY"] = key
             return _result(
-                "anthropic_key", "secrets", True,
+                "anthropic_key",
+                "secrets",
+                True,
                 "ANTHROPIC_API_KEY loaded from 1P via AGENT_REFLECT_ANTHROPIC_KEY_REF.",
             )
         return _result(
-            "anthropic_key", "secrets", False,
+            "anthropic_key",
+            "secrets",
+            False,
             "ANTHROPIC_API_KEY env not set and 1P fallback unavailable. Usually "
             "caused by a missing ANISHA_OP_SVC_TOKEN (see hmac_1p detail) — fix "
             "that first and this probe auto-recovers via the 1P fallback.",
@@ -175,15 +185,15 @@ def check_anthropic_key() -> CheckResult:
 def check_claude_cli() -> CheckResult:
     if not shutil.which("claude"):
         return _result(
-            "claude_cli", "env", False,
+            "claude_cli",
+            "env",
+            False,
             "claude CLI missing — install Claude Code.",
         )
     try:
-        subprocess.check_output(
-            ["claude", "-p", "--help"], stderr=subprocess.STDOUT, text=True, timeout=5
-        )
+        run_external(["claude", "-p", "--help"], timeout=5, env={**os.environ})
         return _result("claude_cli", "env", True, "claude -p --help OK.")
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+    except RuntimeError as e:
         return _result("claude_cli", "env", False, f"claude -p --help failed: {str(e)[:80]}")
 
 
@@ -231,7 +241,9 @@ def check_python_deps() -> CheckResult:
             missing.append(mod)
     if missing:
         return _result(
-            "python_deps", "env", False,
+            "python_deps",
+            "env",
+            False,
             f"missing modules: {', '.join(missing)} (run `uv sync --extra dev`).",
         )
     return _result("python_deps", "env", True, f"all {len(_PY_DEPS)} modules importable.")
@@ -254,11 +266,14 @@ def check_hmac_duckdb_smoke() -> CheckResult:
     secret = _op_read(settings.hmac_secret_ref)
     if not key_id or not secret:
         return _result(
-            "hmac_duckdb_smoke", "data", False,
+            "hmac_duckdb_smoke",
+            "data",
+            False,
             "HMAC pair unavailable from 1P (covered by hmac_1p probe).",
         )
     try:
         import duckdb
+
         con = duckdb.connect(":memory:")
         con.execute("INSTALL httpfs; LOAD httpfs;")
         con.execute(
@@ -270,7 +285,9 @@ def check_hmac_duckdb_smoke() -> CheckResult:
         return _result("hmac_duckdb_smoke", "data", True, "DuckDB GCS secret loaded OK.")
     except Exception as e:  # pragma: no cover - defensive
         return _result(
-            "hmac_duckdb_smoke", "data", False,
+            "hmac_duckdb_smoke",
+            "data",
+            False,
             f"DuckDB GCS smoke failed: {type(e).__name__}: {str(e)[:80]}",
         )
 

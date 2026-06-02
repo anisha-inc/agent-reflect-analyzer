@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import os
 import pathlib
-import subprocess
 
 from pydantic import ValidationError
 
 from . import config
 from .config import Settings
+from .subprocess_util import run_external
 
 
 def _op_read(ref: str) -> str | None:
@@ -27,12 +27,9 @@ def _op_read(ref: str) -> str | None:
         return None
     env = {**os.environ, "OP_SERVICE_ACCOUNT_TOKEN": token}
     try:
-        out = subprocess.check_output(
-            ["op", "read", ref], env=env, text=True,
-            stderr=subprocess.DEVNULL, timeout=10,
-        ).strip()
+        out = run_external(["op", "read", ref], timeout=10, env=env, redact_argv_log=True).strip()
         return out or None
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+    except RuntimeError:
         return None
 
 
@@ -90,24 +87,15 @@ def _script_path() -> pathlib.Path:
 def mint_github_token(*, target_org: str, timeout_s: int = 30) -> str:
     """Return an installation token for ``target_org``. Raises on failure."""
     if "ANISHA_OP_SVC_TOKEN" not in os.environ:
-        raise RuntimeError(
-            "ANISHA_OP_SVC_TOKEN not in env — cannot mint GitHub App token."
-        )
+        raise RuntimeError("ANISHA_OP_SVC_TOKEN not in env — cannot mint GitHub App token.")
     script = _script_path()
     if not script.exists():
         raise RuntimeError(f"vendored github-app-token not found at {script}")
     env = {**os.environ, "GH_APP_TARGET_ORG": target_org}
     try:
-        out = subprocess.check_output(
-            [str(script)], env=env, text=True, timeout=timeout_s,
-            stderr=subprocess.PIPE,
-        ).strip()
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(
-            f"github-app-token failed: exit={e.returncode} stderr={(e.stderr or '')[:200]}"
-        ) from e
-    except subprocess.TimeoutExpired as e:
-        raise RuntimeError(f"github-app-token timed out after {timeout_s}s") from e
+        out = run_external([str(script)], timeout=timeout_s, env=env).strip()
+    except RuntimeError as e:
+        raise RuntimeError(f"github-app-token failed: {e}") from e
     if not out:
         raise RuntimeError("github-app-token returned empty stdout.")
     return out

@@ -10,7 +10,8 @@ from __future__ import annotations
 import hashlib
 import os
 import pathlib
-import subprocess
+
+from .subprocess_util import run_external
 
 
 def _sha16(s: str) -> str:
@@ -18,9 +19,7 @@ def _sha16(s: str) -> str:
 
 
 def dev_id() -> str:
-    email = subprocess.check_output(
-        ["git", "config", "user.email"], text=True
-    ).strip()
+    email = run_external(["git", "config", "user.email"], timeout=5, env={**os.environ}).strip()
     if not email:
         raise RuntimeError("git config user.email is empty")
     return _sha16(email)
@@ -28,13 +27,11 @@ def dev_id() -> str:
 
 def proj_id() -> str:
     try:
-        url = subprocess.check_output(
-            ["git", "remote", "get-url", "origin"],
-            text=True,
-            stderr=subprocess.DEVNULL,
+        url = run_external(
+            ["git", "remote", "get-url", "origin"], timeout=5, env={**os.environ}
         ).strip()
         if url:
             return _sha16(url)
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except RuntimeError:
         pass
     return _sha16(str(pathlib.Path(os.getcwd()).resolve()))

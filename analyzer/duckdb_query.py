@@ -19,12 +19,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import config
+from .subprocess_util import run_external
 
 _DURATION_RE = re.compile(r"^(?P<num>\d+)\s*(?P<unit>[dhmw]?)$")
 
@@ -51,9 +51,7 @@ def _op_read(ref: str) -> str:
     if not token:
         raise RuntimeError("ANISHA_OP_SVC_TOKEN not set — cannot read 1P secret.")
     env = {**os.environ, "OP_SERVICE_ACCOUNT_TOKEN": token}
-    out = subprocess.check_output(
-        ["op", "read", ref], env=env, text=True, stderr=subprocess.PIPE
-    ).strip()
+    out = run_external(["op", "read", ref], timeout=10, env=env, redact_argv_log=True).strip()
     if not out:
         raise RuntimeError(f"op read {ref} returned empty string.")
     return out
@@ -100,7 +98,6 @@ def fetch_raw(con, since: str, hard_limit: int | None = None) -> list[dict[str, 
     if hard_limit:
         # int() coercion guarantees this is a literal integer.
         sql += f" LIMIT {int(hard_limit)}"
-    # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
     rows = con.execute(sql, [cutoff.isoformat()]).fetchall()
     columns = [d[0] for d in con.description]
     return [_row_to_dict(r, columns) for r in rows]
@@ -119,7 +116,7 @@ def _row_to_dict(row: tuple, columns: list[str]) -> dict[str, Any]:
     import uuid
 
     out: dict[str, Any] = {}
-    for col, val in zip(columns, row):
+    for col, val in zip(columns, row, strict=False):
         if val is None:
             continue
         if isinstance(val, uuid.UUID):
@@ -177,7 +174,11 @@ def _session_first_user_prompt(events: list[dict[str, Any]]) -> str | None:
                 return c if isinstance(c, str) else None
         if isinstance(c, list):
             for b in c:
-                if isinstance(b, dict) and b.get("type") == "text" and isinstance(b.get("text"), str):
+                if (
+                    isinstance(b, dict)
+                    and b.get("type") == "text"
+                    and isinstance(b.get("text"), str)
+                ):
                     return b["text"]
     return None
 
@@ -274,11 +275,13 @@ def load_sessions(con, since: str, limit: int) -> list[dict[str, Any]]:
         if metrics.is_reflect_session(first):
             continue
         agg = _aggregate_session(events)
-        agg.update({
-            "sessionId": sid,
-            "first_user_prompt": first or "",
-            "score": 0.0,
-        })
+        agg.update(
+            {
+                "sessionId": sid,
+                "first_user_prompt": first or "",
+                "score": 0.0,
+            }
+        )
         agg["score"] = metrics.interestingness_score(agg)
         sessions.append(agg)
 

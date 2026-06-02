@@ -14,7 +14,13 @@ from pydantic import BaseModel, Field, field_validator
 
 Severity = Literal["low", "medium", "high"]
 _INTENT_CATEGORIES = {
-    "refactor", "bugfix", "feature", "exploration", "docs", "infra", "other",
+    "refactor",
+    "bugfix",
+    "feature",
+    "exploration",
+    "docs",
+    "infra",
+    "other",
 }
 _TRAJECTORY_QUALITIES = {"smooth", "hesitant", "chaotic", "stuck"}
 
@@ -111,12 +117,7 @@ class Candidate(BaseModel):
 
     @classmethod
     def from_cluster(cls, c: ClusterFinding) -> "Candidate":
-        slug = (
-            c.name.lower()
-            .replace(" ", "-")
-            .replace("_", "-")
-            .replace("/", "-")
-        )
+        slug = c.name.lower().replace(" ", "-").replace("_", "-").replace("/", "-")
         slug = "".join(ch for ch in slug if ch.isalnum() or ch == "-").strip("-") or "cluster"
         return cls(
             source="cluster",

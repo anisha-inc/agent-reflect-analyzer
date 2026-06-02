@@ -9,14 +9,13 @@ from __future__ import annotations
 
 import os
 import pathlib
-import subprocess
 import tempfile
-from typing import Any
 
 import jinja2
 
 from . import auth, config, util
 from .llm.schemas import Candidate
+from .subprocess_util import run_external
 
 _TEMPLATE_DIR = pathlib.Path(__file__).parent / "templates"
 
@@ -31,7 +30,7 @@ def _render_body(c: Candidate) -> str:
         undefined=jinja2.StrictUndefined,
         trim_blocks=True,
         lstrip_blocks=True,
-        autoescape=False,
+        autoescape=False,  # noqa: S701 — plain-markdown output for gh, no HTML/XSS surface
     )
     tpl = env.get_template("issue_body.j2")
     # nosemgrep: python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2
@@ -58,23 +57,26 @@ def _ensure_label(repo: str, env: dict) -> None:
     if key in _LABEL_ENSURED:
         return
     try:
-        subprocess.check_output(
-            ["gh", "label", "create", config.ISSUE_LABEL,
-             "--repo", repo,
-             "--color", "FBCA04",
-             "--description", "Pattern detected by the agent-reflect analyzer"],
-            env=env, text=True, stderr=subprocess.STDOUT, timeout=15,
+        run_external(
+            [
+                "gh",
+                "label",
+                "create",
+                config.ISSUE_LABEL,
+                "--repo",
+                repo,
+                "--color",
+                "FBCA04",
+                "--description",
+                "Pattern detected by the agent-reflect analyzer",
+            ],
+            timeout=15,
+            env=env,
         )
-    except subprocess.CalledProcessError as e:
-        # `gh label create` exits non-zero if label already exists; treat as OK.
-        if e.output and "already exists" in e.output:
-            pass
-        # Otherwise the subsequent `gh issue create --label` will also fail and
-        # surface a clearer error.
-    except subprocess.TimeoutExpired:
-        # Network slow / gh hung — fall through. If the label genuinely doesn't
-        # exist, the subsequent `gh issue create --label` will surface the
-        # error; don't abort the whole emit run on a flaky label probe.
+    except RuntimeError:
+        # Non-fatal: the label may already exist, or gh hung. If it genuinely
+        # doesn't exist, the subsequent `gh issue create --label` surfaces a
+        # clearer error — don't abort the emit run on a flaky label probe.
         pass
     _LABEL_ENSURED.add(key)
 
@@ -103,17 +105,25 @@ def emit_issue(
         tmp = pathlib.Path(f.name)
 
     try:
-        out = subprocess.check_output(
-            ["gh", "issue", "create", "--repo", repo,
-             "--title", c.title,
-             "--label", config.ISSUE_LABEL,
-             "--body-file", str(tmp)],
-            env=env, text=True, stderr=subprocess.STDOUT, timeout=30,
+        out = run_external(
+            [
+                "gh",
+                "issue",
+                "create",
+                "--repo",
+                repo,
+                "--title",
+                c.title,
+                "--label",
+                config.ISSUE_LABEL,
+                "--body-file",
+                str(tmp),
+            ],
+            timeout=30,
+            env=env,
         ).strip()
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(
-            f"gh issue create failed: exit={e.returncode} out={(e.output or '')[:400]}"
-        ) from e
+    except RuntimeError as e:
+        raise RuntimeError(f"gh issue create failed: {e}") from e
     finally:
         tmp.unlink(missing_ok=True)
 

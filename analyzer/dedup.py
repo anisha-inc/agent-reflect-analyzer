@@ -11,11 +11,11 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 from typing import Any
 
 from . import config
 from .llm.schemas import Candidate
+from .subprocess_util import run_external
 
 _SYMPTOM_RE = re.compile(r"## Симптом\s+(.+?)(?=\n##|\Z)", re.S)
 _FIX_RE = re.compile(r"## Fix\s+(.+?)(?=\n##|\Z)", re.S)
@@ -30,8 +30,9 @@ def parse_issue_sections(body: str) -> dict[str, str]:
     }
 
 
-def fetch_open_issues(repo: str, token: str | None = None,
-                      include_closed_since: str | None = None) -> list[dict[str, Any]]:
+def fetch_open_issues(
+    repo: str, token: str | None = None, include_closed_since: str | None = None
+) -> list[dict[str, Any]]:
     """Return a list of {number,title,body,state} dicts for label=improvement-by-agent.
 
     Closed issues from N days ago are appended when `include_closed_since` is
@@ -42,6 +43,7 @@ def fetch_open_issues(repo: str, token: str | None = None,
     """
     if token is None:
         from . import auth, util
+
         try:
             token = auth.mint_github_token(target_org=util.parse_owner(repo))
         except RuntimeError:
@@ -51,13 +53,26 @@ def fetch_open_issues(repo: str, token: str | None = None,
     if token:
         env["GH_TOKEN"] = token
 
-    def _run(state: str, since_arg: list[str] = ()) -> list[dict[str, Any]]:
-        out = subprocess.check_output(
-            ["gh", "issue", "list", "--repo", repo,
-             "--label", config.ISSUE_LABEL,
-             "--state", state, "--limit", "200",
-             "--json", "number,title,body,state,closedAt", *since_arg],
-            env=env, text=True, timeout=30,
+    def _run(state: str, since_arg: tuple[str, ...] = ()) -> list[dict[str, Any]]:
+        out = run_external(
+            [
+                "gh",
+                "issue",
+                "list",
+                "--repo",
+                repo,
+                "--label",
+                config.ISSUE_LABEL,
+                "--state",
+                state,
+                "--limit",
+                "200",
+                "--json",
+                "number,title,body,state,closedAt",
+                *since_arg,
+            ],
+            timeout=30,
+            env=env,
         )
         return json.loads(out or "[]")
 
@@ -65,6 +80,7 @@ def fetch_open_issues(repo: str, token: str | None = None,
     if include_closed_since:
         # gh issue list doesn't support --since; filter client-side.
         from datetime import datetime, timedelta, timezone
+
         days = int(re.match(r"(\d+)", include_closed_since).group(1))
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         for it in _run("closed"):
@@ -85,12 +101,10 @@ def _candidate_text(c: Candidate) -> str:
 
 def _issue_text(it: dict[str, Any]) -> str:
     sec = parse_issue_sections(it.get("body", "") or "")
-    return f"{it.get('title','')}. {sec['symptom']}"
+    return f"{it.get('title', '')}. {sec['symptom']}"
 
 
-def _fallback_dedup(
-    candidates: list[Candidate], existing: list[dict[str, Any]]
-) -> list[Candidate]:
+def _fallback_dedup(candidates: list[Candidate], existing: list[dict[str, Any]]) -> list[Candidate]:
     """Substring-based fallback when sentence-transformers isn't available.
 
     Drops a candidate if its title (lower, normalized) is wholly contained in
@@ -140,8 +154,8 @@ def dedup_candidates(
         return _fallback_dedup(candidates, existing)
 
     try:
-        from sentence_transformers import SentenceTransformer, util
         import numpy as np  # noqa: F401
+        from sentence_transformers import SentenceTransformer, util
     except ImportError:
         return _fallback_dedup(candidates, existing)
 

@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import subprocess
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from analyzer import issues
 from analyzer.llm.schemas import Candidate
@@ -45,32 +44,35 @@ def test_render_body_handles_empty_evidence_and_examples():
 
 
 def test_emit_issue_dry_run_does_not_shell_out():
-    with patch("subprocess.check_output") as mocked:
-        url = issues.emit_issue(_cand(), repo="anisha-inc/plugins", dry_run=True)
+    with patch.object(issues, "run_external") as mocked:
+        url = issues.emit_issue(_cand(), repo="octo-org/octo-repo", dry_run=True)
         assert url is None
         mocked.assert_not_called()
 
 
 def test_emit_issue_calls_gh_with_body_file(tmp_path):
-    fake_url = "https://github.com/anisha-inc/plugins/issues/123\n"
-    with patch("subprocess.check_output", return_value=fake_url) as mocked:
+    fake_url = "https://github.com/octo-org/octo-repo/issues/123\n"
+    with patch.object(issues, "run_external", return_value=fake_url) as mocked:
         url = issues.emit_issue(
-            _cand(), repo="anisha-inc/plugins", token="ghs_dummy", dry_run=False,
+            _cand(),
+            repo="octo-org/octo-repo",
+            token="ghs_dummy",
+            dry_run=False,
         )
         assert url == fake_url.strip()
+        # Most recent call is `gh issue create` (label-create runs first when uncached).
         args = mocked.call_args.args[0]
         assert args[0] == "gh"
         assert "--repo" in args
-        assert args[args.index("--repo") + 1] == "anisha-inc/plugins"
+        assert args[args.index("--repo") + 1] == "octo-org/octo-repo"
         assert "--label" in args
         assert "--body-file" in args
 
 
 def test_emit_issue_propagates_gh_failure():
-    err = subprocess.CalledProcessError(1, "gh", output="rate limit")
-    with patch("subprocess.check_output", side_effect=err):
+    with patch.object(issues, "run_external", side_effect=RuntimeError("rate limit")):
         try:
-            issues.emit_issue(_cand(), repo="anisha-inc/plugins", token="ghs_dummy")
+            issues.emit_issue(_cand(), repo="octo-org/octo-repo", token="ghs_dummy")
         except RuntimeError as e:
             assert "gh issue create failed" in str(e)
         else:

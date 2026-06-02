@@ -30,8 +30,6 @@ def run_pipeline(
     api_key_fallback: bool,
     verbose: bool,
 ) -> dict[str, Any]:
-    started = time.time()
-
     # Lazy local imports so the module is importable even without optional deps.
     try:
         from . import duckdb_query, metrics
@@ -66,6 +64,7 @@ def run_pipeline(
         # so no env bootstrap is needed here — keys are pulled from 1P on demand.
         try:
             from .llm import pipeline as llm_pipeline
+
             candidates = llm_pipeline.run(
                 sessions=sessions,
                 events_by_session=events_by_session,
@@ -91,8 +90,11 @@ def run_pipeline(
     if candidates and repo:
         try:
             from . import dedup, redact
+
             existing = dedup.fetch_open_issues(repo, include_closed_since=include_closed_since)
-            kept = dedup.dedup_candidates(candidates, existing, include_closed_since=include_closed_since)
+            kept = dedup.dedup_candidates(
+                candidates, existing, include_closed_since=include_closed_since
+            )
             record.candidates_after_dedup = len(kept)
             record.dropped_as_duplicate = len(candidates) - len(kept)
             kept = [redact.redact_candidate(c, record=record) for c in kept]
@@ -108,11 +110,13 @@ def run_pipeline(
 
     # Stage [8] emit issues
     from . import issues as _issues_mod
+
     if candidates and emit_issues and repo:
         try:
             token = None
             try:
                 from . import auth, util
+
                 token = auth.mint_github_token(target_org=util.parse_owner(repo))
             except RuntimeError as e:
                 record.warnings.append(f"mint_token_failed: {e}")

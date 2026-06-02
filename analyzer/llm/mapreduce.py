@@ -29,6 +29,7 @@ def _build_compact_session(session: dict[str, Any], events: list[dict[str, Any]]
         if isinstance(content, str):
             try:
                 import json as _json
+
                 content = _json.loads(content)
             except Exception:
                 content = []
@@ -53,9 +54,8 @@ def _build_compact_session(session: dict[str, Any], events: list[dict[str, Any]]
         "started_at": session.get("started_at") or "",
         "tool_counts": dict(tool_counts.most_common(8)),
         "error_classes": session.get("error_classes", []) or ["<none>"],
-        "thinking_digest": (
-            thinking_first + (" ... " + thinking_last if thinking_last else "")
-        ) or "<none>",
+        "thinking_digest": (thinking_first + (" ... " + thinking_last if thinking_last else ""))
+        or "<none>",
         "last_assistant_text": session.get("last_assistant_text", "")[:600] or "<none>",
         "outcome": outcome,
     }
@@ -97,7 +97,7 @@ async def _summarize_one(
         except Exception as e:
             record.haiku_summaries_failed += 1
             record.warnings.append(
-                f"haiku_summary_failed sid={session.get('sessionId','?')}: "
+                f"haiku_summary_failed sid={session.get('sessionId', '?')}: "
                 f"{type(e).__name__}: {str(e)[:120]}"
             )
             return None
@@ -113,7 +113,9 @@ async def _map_rest_async(
     record: audit.RunRecord,
 ) -> list[HaikuSummary]:
     from anthropic import AsyncAnthropic
+
     from .. import auth as _auth
+
     api_key = _auth.read_anthropic_api_key()
     # Explicit api_key — don't depend on env (parent process may have it unset
     # or set to a different account). Falls back to env-discovery only if 1P
@@ -123,8 +125,14 @@ async def _map_rest_async(
     tasks = [
         asyncio.create_task(
             _summarize_one(
-                s, events_by_session.get(s["sessionId"], []),
-                dev_id, proj_id, client, sem, model, record,
+                s,
+                events_by_session.get(s["sessionId"], []),
+                dev_id,
+                proj_id,
+                client,
+                sem,
+                model,
+                record,
             )
         )
         for s in rest

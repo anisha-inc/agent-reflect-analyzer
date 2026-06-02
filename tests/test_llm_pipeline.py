@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from analyzer import audit
 from analyzer.llm import clio, flatten, mapreduce, pipeline, prompt_loader
-from analyzer.llm.schemas import Candidate, ClusterFinding, Finding, HaikuSummary, OpusFindings
+from analyzer.llm.schemas import Candidate, ClusterFinding, Finding, OpusFindings
 
 
 def test_extract_json_pure():
@@ -17,7 +17,7 @@ def test_extract_json_fenced():
 
 
 def test_extract_json_embedded():
-    text = "Here you go:\n{\n  \"a\": 1\n}\nDone."
+    text = 'Here you go:\n{\n  "a": 1\n}\nDone.'
     out = prompt_loader.extract_json(text)
     assert out.startswith("{") and out.endswith("}")
 
@@ -36,6 +36,7 @@ def test_extract_json_balanced_stops_at_first_object():
     assert out == '{"a": 1}'
     # Crucially: NOT greedy capture across both — that would be invalid JSON.
     import json as _json
+
     _json.loads(out)
 
 
@@ -66,14 +67,17 @@ def test_truncate_long_strings_marked():
 def test_turn_from_events_simple_user_then_assistant():
     events = [
         {"type": "user", "message": {"role": "user", "content": "do thing"}},
-        {"type": "assistant", "message": {
-            "role": "assistant",
-            "content": [
-                {"type": "thinking", "thinking": "Let me think"},
-                {"type": "text", "text": "ok"},
-                {"type": "tool_use", "name": "Bash", "input": {"command": "ls"}},
-            ],
-        }},
+        {
+            "type": "assistant",
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {"type": "thinking", "thinking": "Let me think"},
+                    {"type": "text", "text": "ok"},
+                    {"type": "tool_use", "name": "Bash", "input": {"command": "ls"}},
+                ],
+            },
+        },
     ]
     turns = flatten._turn_from_events(events)
     assert len(turns) == 1
@@ -93,12 +97,17 @@ def test_mapreduce_build_compact_extracts_tool_counts():
         "started_at": "2026-05-25T10:00:00Z",
     }
     events = [
-        {"type": "assistant", "message": {"content": [
-            {"type": "tool_use", "name": "Read", "input": {}},
-            {"type": "tool_use", "name": "Read", "input": {}},
-            {"type": "tool_use", "name": "Edit", "input": {}},
-            {"type": "thinking", "thinking": "Looking at the code"},
-        ]}},
+        {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "tool_use", "name": "Read", "input": {}},
+                    {"type": "tool_use", "name": "Read", "input": {}},
+                    {"type": "tool_use", "name": "Edit", "input": {}},
+                    {"type": "thinking", "thinking": "Looking at the code"},
+                ]
+            },
+        },
     ]
     compact = mapreduce._build_compact_session(session, events)
     assert compact["sessionId"] == "abc"
@@ -114,14 +123,21 @@ def test_clio_cluster_count_grows_with_size():
 
 
 def test_pipeline_merge_dedups_overlapping_pattern_ids():
-    opus = OpusFindings(findings=[
-        Finding(
-            pattern_id="foo-bar", title="Foo", severity="low",
-            frequency_in_sample=3, session_examples=[],
-            mast_taxonomy="OTHER", symptom="", proposed_fix="",
-            evidence_quotes=[],
-        ),
-    ])
+    opus = OpusFindings(
+        findings=[
+            Finding(
+                pattern_id="foo-bar",
+                title="Foo",
+                severity="low",
+                frequency_in_sample=3,
+                session_examples=[],
+                mast_taxonomy="OTHER",
+                symptom="",
+                proposed_fix="",
+                evidence_quotes=[],
+            ),
+        ]
+    )
     clusters = [
         ClusterFinding(name="Foo bar", description="", frequency=5, session_ids=[]),
     ]
@@ -133,14 +149,38 @@ def test_pipeline_merge_dedups_overlapping_pattern_ids():
 
 def test_pipeline_filter_min_freq():
     candidates = [
-        Candidate(source="opus_top_k", pattern_id="p1", title="t1", frequency=1,
-                  symptom="s", proposed_fix="f"),
-        Candidate(source="opus_top_k", pattern_id="p2", title="t2", frequency=2,
-                  symptom="s", proposed_fix="f"),
-        Candidate(source="cluster", pattern_id="p3", title="t3", frequency=2,
-                  symptom="s", proposed_fix="f"),
-        Candidate(source="cluster", pattern_id="p4", title="t4", frequency=3,
-                  symptom="s", proposed_fix="f"),
+        Candidate(
+            source="opus_top_k",
+            pattern_id="p1",
+            title="t1",
+            frequency=1,
+            symptom="s",
+            proposed_fix="f",
+        ),
+        Candidate(
+            source="opus_top_k",
+            pattern_id="p2",
+            title="t2",
+            frequency=2,
+            symptom="s",
+            proposed_fix="f",
+        ),
+        Candidate(
+            source="cluster",
+            pattern_id="p3",
+            title="t3",
+            frequency=2,
+            symptom="s",
+            proposed_fix="f",
+        ),
+        Candidate(
+            source="cluster",
+            pattern_id="p4",
+            title="t4",
+            frequency=3,
+            symptom="s",
+            proposed_fix="f",
+        ),
     ]
     out = pipeline._filter_min_freq(candidates)
     ids = {c.pattern_id for c in out}
@@ -150,10 +190,17 @@ def test_pipeline_filter_min_freq():
 def test_pipeline_returns_empty_on_no_sessions():
     record = audit.RunRecord()
     out = pipeline.run(
-        sessions=[], events_by_session={}, top_k=10,
-        model_top_k="opus", model_rest="haiku", concurrency=10,
-        cluster=False, api_key_fallback=False, record=record,
-        strategy="hybrid", since="7d",
+        sessions=[],
+        events_by_session={},
+        top_k=10,
+        model_top_k="opus",
+        model_rest="haiku",
+        concurrency=10,
+        cluster=False,
+        api_key_fallback=False,
+        record=record,
+        strategy="hybrid",
+        since="7d",
     )
     assert out == []
 
@@ -171,7 +218,8 @@ def test_prompt_render_haiku_user_renders():
             "last_assistant_text": "Done.",
             "outcome": "task_completed",
         },
-        dev_id="d", proj_id="p",
+        dev_id="d",
+        proj_id="p",
     )
     assert "SESSION abc" in out
     assert "Read(3)" in out
@@ -195,14 +243,17 @@ def test_stringify_handles_dicts_and_none():
 def test_turn_from_events_collects_thinking_blocks():
     events = [
         {"type": "user", "message": {"role": "user", "content": "hi"}},
-        {"type": "assistant", "message": {
-            "role": "assistant",
-            "content": [
-                {"type": "thinking", "thinking": "First thought"},
-                {"type": "thinking", "thinking": "Second thought"},
-                {"type": "text", "text": "done"},
-            ],
-        }},
+        {
+            "type": "assistant",
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {"type": "thinking", "thinking": "First thought"},
+                    {"type": "thinking", "thinking": "Second thought"},
+                    {"type": "text", "text": "done"},
+                ],
+            },
+        },
     ]
     turns = flatten._turn_from_events(events)
     assert len(turns) == 1
@@ -211,34 +262,71 @@ def test_turn_from_events_collects_thinking_blocks():
 
 def test_pipeline_skip_opus_when_strategy_map_reduce_only():
     """strategy=map-reduce-B should skip Stage [3]."""
-    import analyzer.llm.flatten as flatten_mod
     from unittest.mock import patch
-    sessions = [{"sessionId": "s1", "tool_calls": 0, "errors": 0,
-                 "total_output_tokens": 0, "tool_diversity": 0, "score": 0}]
+
+    import analyzer.llm.flatten as flatten_mod
+
+    sessions = [
+        {
+            "sessionId": "s1",
+            "tool_calls": 0,
+            "errors": 0,
+            "total_output_tokens": 0,
+            "tool_diversity": 0,
+            "score": 0,
+        }
+    ]
     record = audit.RunRecord()
-    with patch.object(flatten_mod, "analyze_top_k") as opus, \
-         patch("analyzer.llm.mapreduce.map_rest", return_value=[]):
+    with (
+        patch.object(flatten_mod, "analyze_top_k") as opus,
+        patch("analyzer.llm.mapreduce.map_rest", return_value=[]),
+    ):
         pipeline.run(
-            sessions=sessions, events_by_session={"s1": []}, top_k=0,
-            model_top_k="opus", model_rest="haiku", concurrency=3,
-            cluster=False, api_key_fallback=False, record=record,
-            strategy="map-reduce-B", since="7d",
+            sessions=sessions,
+            events_by_session={"s1": []},
+            top_k=0,
+            model_top_k="opus",
+            model_rest="haiku",
+            concurrency=3,
+            cluster=False,
+            api_key_fallback=False,
+            record=record,
+            strategy="map-reduce-B",
+            since="7d",
         )
     opus.assert_not_called()
 
 
 def test_pipeline_strategy_flatten_A_skips_haiku():
     from unittest.mock import patch
+
     record = audit.RunRecord()
-    sessions = [{"sessionId": "s1", "tool_calls": 0, "errors": 0,
-                 "total_output_tokens": 0, "tool_diversity": 0, "score": 0}]
-    with patch("analyzer.llm.flatten.analyze_top_k") as opus, \
-         patch("analyzer.llm.mapreduce.map_rest") as haiku:
+    sessions = [
+        {
+            "sessionId": "s1",
+            "tool_calls": 0,
+            "errors": 0,
+            "total_output_tokens": 0,
+            "tool_diversity": 0,
+            "score": 0,
+        }
+    ]
+    with (
+        patch("analyzer.llm.flatten.analyze_top_k") as opus,
+        patch("analyzer.llm.mapreduce.map_rest") as haiku,
+    ):
         opus.return_value = OpusFindings()
         pipeline.run(
-            sessions=sessions, events_by_session={"s1": []}, top_k=10,
-            model_top_k="opus", model_rest="haiku", concurrency=3,
-            cluster=False, api_key_fallback=False, record=record,
-            strategy="flatten-A", since="7d",
+            sessions=sessions,
+            events_by_session={"s1": []},
+            top_k=10,
+            model_top_k="opus",
+            model_rest="haiku",
+            concurrency=3,
+            cluster=False,
+            api_key_fallback=False,
+            record=record,
+            strategy="flatten-A",
+            since="7d",
         )
     haiku.assert_not_called()

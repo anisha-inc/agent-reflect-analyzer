@@ -24,6 +24,7 @@ def _isolated_audit_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAUDE_PLUGIN_DATA", str(tmp_path))
     # config.AUDIT_DIR was computed at import — patch it for the run.
     from analyzer import config
+
     monkeypatch.setattr(config, "PLUGIN_DATA_ROOT", tmp_path)
     monkeypatch.setattr(config, "AUDIT_DIR", tmp_path / "audit")
     yield

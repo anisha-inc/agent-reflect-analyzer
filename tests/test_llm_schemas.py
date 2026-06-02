@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from analyzer.llm.schemas import Candidate, ClusterFinding, Finding, OpusFindings
 
 
@@ -42,9 +40,14 @@ def test_candidate_from_cluster_slugifies_name():
 
 def test_finding_validation_truncates_oversized_examples():
     f = Finding(
-        pattern_id="x", title="t", severity="low", frequency_in_sample=1,
+        pattern_id="x",
+        title="t",
+        severity="low",
+        frequency_in_sample=1,
         session_examples=["a", "b", "c", "d"],
-        symptom="s", proposed_fix="f", evidence_quotes=["q1", "q2", "q3", "q4", "q5"],
+        symptom="s",
+        proposed_fix="f",
+        evidence_quotes=["q1", "q2", "q3", "q4", "q5"],
     )
     # Lenient validator truncates to 3 instead of raising.
     assert f.session_examples == ["a", "b", "c"]
