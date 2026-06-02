@@ -89,10 +89,14 @@ tag commit and a clean-shell smoke run passing.
 
 ## Next Action
 
-Step 12 — local verification DONE (ruff, scrub smoke + full diff, actionlint ×3,
-uv build + wheel-bundles-templates, socket-locked test subset). Next: open the
-initial-release PR (seed → main), wait for CI green, then — only after explicit
-confirmation — squash-merge + manual `git tag -a v1.0.0` + `gh release create`.
+PR #1 open and **CI fully green** (ruff, scrub-test, py-tests, subprocess-guard,
+status). One fix-ci iteration applied (offline redact). PR is MERGEABLE but
+`REVIEW_REQUIRED` (branch protection). REMAINING (irreversible, awaiting explicit
+confirmation): squash-merge → `git checkout main && git pull` →
+`git tag -a v1.0.0 -m "..."` → `git push origin v1.0.0` →
+`gh release create v1.0.0 --target <main sha>`. Then verify
+`gh release view v1.0.0` + clean-shell `uv run --from git+...@v1.0.0
+analyzer-cli --check --json` → exit 0.
 
 ## Follow-ups
 
