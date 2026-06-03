@@ -188,6 +188,57 @@ def _shrink_session(s: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+_MIN_SESSION_BYTES = 4 * 1024
+
+
+def _fit_session_to_budget(
+    s: dict[str, Any], dev_id: str, proj_id: str, budget: int
+) -> tuple[dict[str, Any], bool]:
+    """Shrink/trim one session so its rendered size ≤ `budget`, never dropping it.
+
+    PF-27: replaces whole-session drop with chunking so every top-K session
+    stays represented. Returns ``(session, chunked)`` where ``chunked`` is True
+    when any reduction was applied. Strategy: within budget → unchanged; else
+    apply the head+tail ``_shrink_session``; if still over, drop the middle-most
+    turn repeatedly (keeping head and tail) until it fits or 2 turns remain.
+    """
+    if len(_render_user_prompt([s], dev_id, proj_id).encode("utf-8")) <= budget:
+        return s, False
+    s = _shrink_session(s)
+    turns = s.get("turns") or []
+    while len(turns) > 2 and (
+        len(_render_user_prompt([{**s, "turns": turns}], dev_id, proj_id).encode("utf-8"))
+        > budget
+    ):
+        mid = len(turns) // 2
+        turns = turns[:mid] + turns[mid + 1 :]
+    return {**s, "turns": turns}, True
+
+
+def _chunk_sessions_to_budget(
+    sessions: list[dict[str, Any]], dev_id: str, proj_id: str, budget: int
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Fair-share chunk every session so the combined prompt fits `budget`
+    without dropping any session (PF-27).
+
+    Each session gets an equal slice (``budget // n``, floored at
+    ``_MIN_SESSION_BYTES``) and is shrunk/trimmed to fit it. Returns
+    ``(fitted_sessions, chunked_sids)`` — the 8-char ids of sessions that were
+    reduced, for audit warnings.
+    """
+    if not sessions:
+        return sessions, []
+    share = max(_MIN_SESSION_BYTES, budget // max(1, len(sessions)))
+    fitted: list[dict[str, Any]] = []
+    chunked: list[str] = []
+    for s in sessions:
+        s2, was_chunked = _fit_session_to_budget(s, dev_id, proj_id, share)
+        if was_chunked:
+            chunked.append(str(s.get("sessionId", "?"))[:8])
+        fitted.append(s2)
+    return fitted, chunked
+
+
 class OpusInvocationError(RuntimeError):
     """Raised when `claude -p` fails. Set `is_quota=True` for fall-back path."""
 
@@ -372,27 +423,21 @@ def analyze_top_k(
         n_sessions=len(sessions),
         since=since,
     )
-    # Fit the user prompt into the Opus context window via three steps:
-    #   1. Drop lowest-ranked sessions until under budget.
-    #   2. If still over after dropping to 1 session, shrink turns aggressively
-    #      (keep 15% head + 15% tail, drop thinking, truncate I/O to 200 ch).
-    #   3. Hard-truncate the final rendered string to the budget — last resort
+    # Fit the user prompt into the Opus context window:
+    #   1. Fair-share chunking — give each session an equal slice of the budget
+    #      and shrink/trim it to fit, so NO session is dropped (PF-27). The most
+    #      active sessions used to be dropped wholesale (opus_input_tok=0).
+    #   2. Hard-truncate the final rendered string to the budget — last resort
     #      so Opus always receives a parseable payload, even if it's partial.
     rendered_sessions = list(enriched)
     user_prompt = _render_user_prompt(rendered_sessions, dev_id, proj_id)
-    while len(user_prompt.encode("utf-8")) > _PROMPT_BUDGET_BYTES and len(rendered_sessions) > 1:
-        dropped = rendered_sessions.pop()
-        record.warnings.append(
-            f"opus_prompt_overflow_drop sid={dropped.get('sessionId', '?')[:8]} "
-            f"size={len(user_prompt):,}B"
-        )
-        user_prompt = _render_user_prompt(rendered_sessions, dev_id, proj_id)
     if len(user_prompt.encode("utf-8")) > _PROMPT_BUDGET_BYTES:
-        rendered_sessions = [_shrink_session(s) for s in rendered_sessions]
-        user_prompt = _render_user_prompt(rendered_sessions, dev_id, proj_id)
-        record.warnings.append(
-            f"opus_prompt_shrunk size={len(user_prompt):,}B sessions={len(rendered_sessions)}"
+        rendered_sessions, chunked_sids = _chunk_sessions_to_budget(
+            rendered_sessions, dev_id, proj_id, _PROMPT_BUDGET_BYTES
         )
+        for sid in chunked_sids:
+            record.warnings.append(f"opus_session_chunked sid={sid}")
+        user_prompt = _render_user_prompt(rendered_sessions, dev_id, proj_id)
     if len(user_prompt.encode("utf-8")) > _PROMPT_BUDGET_BYTES:
         # Hard cap — slice the encoded bytes, decode loosely. Truncates mid-turn
         # but Opus still gets the start of the flattened sessions and the

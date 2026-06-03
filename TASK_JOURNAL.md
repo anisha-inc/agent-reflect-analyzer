@@ -26,8 +26,8 @@ dropping them — then ship a new semver release (`v1.0.1`+).
 - [x] Step 1: PF-15/19 — org-scoped `v=2` read glob + fail-closed owner resolution (charset-validated) ✓ `50ef431`
 - [x] Step 2: PF-29 — prefer caller `GITHUB_TOKEN` over minted App token (dedup + emit) ✓ `aad8681`
 - [x] Step 3: PF-25 — package `github-app-token` in wheel (force-include) + invoke via `bash` ✓ `2e10780`
-- [ ] Step 4: PF-26 — `recent_ships` probe via DuckDB/HMAC path (drop gsutil)
-- [ ] Step 5: PF-27 — chunk large sessions instead of dropping (fair-share)
+- [x] Step 4: PF-26 — `recent_ships` probe via DuckDB/HMAC path (drop gsutil) ✓ `b0440b5`
+- [x] Step 5: PF-27 — chunk large sessions instead of dropping (fair-share) ✓ (commit below)
 - [ ] Step 6: version bump 1.1.0 + README docs (org-scoping, fail-closed, packaging)
 - [ ] Step 7: create PR
 
