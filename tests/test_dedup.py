@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from analyzer import dedup
 from analyzer.llm.schemas import Candidate
 
@@ -67,3 +69,22 @@ def test_dedup_fallback_keeps_unrelated():
     existing = [{"title": "Something completely else", "body": "## Симптом\nDifferent."}]
     kept = dedup.dedup_candidates(candidates, existing, force_fallback=True)
     assert len(kept) == 1
+
+
+def test_fetch_open_issues_uses_resolved_token():
+    """PF-29: fetch_open_issues threads the resolved GitHub token into the
+    `gh issue list` subprocess env (caller token preferred over minting)."""
+    captured: dict = {}
+
+    def _fake_run(argv, **kwargs):
+        captured["env"] = kwargs.get("env", {})
+        return "[]"
+
+    with (
+        patch.object(dedup, "run_external", side_effect=_fake_run),
+        patch("analyzer.auth.resolve_github_token", return_value="resolved-tok") as res,
+    ):
+        out = dedup.fetch_open_issues("octo-org/octo-repo")
+    assert out == []
+    res.assert_called_once()
+    assert captured["env"].get("GH_TOKEN") == "resolved-tok"

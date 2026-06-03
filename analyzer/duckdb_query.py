@@ -73,22 +73,32 @@ def connect():
     return con
 
 
-def _glob() -> str:
+def _glob(owner: str) -> str:
+    """Org-scoped read glob for the `v=2` bucket layout (tenant isolation, PF-15).
+
+    Reads only `…/raw/v=2/org=<owner>/dev=*/proj=*/*.jsonl`, never a bucket-wide
+    `dev=*/proj=*`. `owner` is validated against the GitHub-org charset by
+    `cli._resolve_read_owner` before it reaches here.
+    """
     settings = config.load_settings()
-    return f"{settings.gcs_bucket}/{config.GCS_RAW_PREFIX}/dev=*/proj=*/*.jsonl"
+    return (
+        f"{settings.gcs_bucket}/{config.GCS_RAW_PREFIX}/{config.GCS_LAYOUT_VERSION}"
+        f"/org={owner}/dev=*/proj=*/*.jsonl"
+    )
 
 
-def fetch_raw(con, since: str, hard_limit: int | None = None) -> list[dict[str, Any]]:
-    """Pull raw JSONL rows from GCS within `since` window.
+def fetch_raw(con, since: str, owner: str, hard_limit: int | None = None) -> list[dict[str, Any]]:
+    """Pull raw JSONL rows from GCS within `since` window, scoped to `owner`.
 
     Returns a list of dicts with original event shape preserved.
     """
     cutoff = parse_duration(since)
-    # No user input in the SQL — _glob() returns a constant from analyzer.config;
-    # the only dynamic value (cutoff) is passed as a parameter binding below.
+    # The only interpolated value is the glob, whose sole dynamic component
+    # (`owner`) is charset-validated upstream by cli._resolve_read_owner; the
+    # window cutoff is passed as a parameter binding below.
     sql = f"""
         SELECT * FROM read_json_auto(
-            '{_glob()}',
+            '{_glob(owner)}',
             format='newline_delimited',
             union_by_name=true,
             ignore_errors=true
@@ -254,15 +264,16 @@ def _aggregate_session(events: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def load_sessions(con, since: str, limit: int) -> list[dict[str, Any]]:
-    """Return ranked + capped sessions with baseline metrics.
+def load_sessions(con, since: str, limit: int, owner: str) -> list[dict[str, Any]]:
+    """Return ranked + capped sessions with baseline metrics, scoped to `owner`.
 
-    Pulls all events within `since`, groups by sessionId, computes metrics,
-    filters self-pollution, scores by interestingness, returns top `limit`.
+    Pulls events within `since` for the single `org=<owner>` partition, groups by
+    sessionId, computes metrics, filters self-pollution, scores by
+    interestingness, returns top `limit`.
     """
     from . import metrics  # local: avoid circular when metrics imports config
 
-    raw = fetch_raw(con, since=since)
+    raw = fetch_raw(con, since=since, owner=owner)
     by_session: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for ev in raw:
         sid = ev.get("sessionId")
@@ -290,12 +301,15 @@ def load_sessions(con, since: str, limit: int) -> list[dict[str, Any]]:
 
 
 def load_events_for_sessions(
-    con, session_ids: list[str], since: str = "30d"
+    con, session_ids: list[str], owner: str, since: str = "30d"
 ) -> dict[str, list[dict[str, Any]]]:
-    """Return events grouped by sessionId, restricted to the supplied ids."""
+    """Return events grouped by sessionId, restricted to the supplied ids.
+
+    Scoped to the single `org=<owner>` partition (tenant isolation, PF-15).
+    """
     if not session_ids:
         return {}
-    raw = fetch_raw(con, since=since)
+    raw = fetch_raw(con, since=since, owner=owner)
     wanted = set(session_ids)
     out: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for ev in raw:

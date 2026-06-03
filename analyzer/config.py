@@ -72,6 +72,12 @@ def load_settings() -> Settings:
 # --- Non-secret constants -------------------------------------------------
 
 GCS_RAW_PREFIX = "raw"
+# Bucket layout version. v=2 adds the `org=<owner>` tenant partition under the
+# raw prefix (`raw/v=2/org=<owner>/dev=<…>/proj=<…>/…`); the writer (ship.sh in
+# the paired plugins task) and this reader move to it in lockstep. The legacy
+# un-partitioned `raw/dev=*/proj=*` layout is cross-tenant-contaminated and is
+# intentionally no longer read.
+GCS_LAYOUT_VERSION = "v=2"
 GCS_S3_ENDPOINT = "storage.googleapis.com"
 
 ISSUE_LABEL = "improvement-by-agent"

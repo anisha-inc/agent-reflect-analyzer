@@ -96,60 +96,88 @@ def check_gh_cli() -> CheckResult:
 
 
 def check_app_token_script() -> CheckResult:
+    # Resolution order mirrors auth._script_path: plugin → packaged wheel →
+    # source checkout. The wheel-bundled copy (PF-25) isn't marked executable,
+    # so we don't require os.X_OK and invoke via `bash <path>`.
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates: list[str] = []
     plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
     if plugin_root:
-        path = os.path.join(plugin_root, "scripts", "github-app-token")
-    else:
-        path = os.path.join(os.path.dirname(__file__), "..", "scripts", "github-app-token")
-    if not os.path.isfile(path):
+        candidates.append(os.path.join(plugin_root, "scripts", "github-app-token"))
+    candidates.append(os.path.join(here, "scripts", "github-app-token"))  # packaged wheel
+    candidates.append(os.path.join(here, "..", "scripts", "github-app-token"))  # source checkout
+    path = next((p for p in candidates if os.path.isfile(p)), None)
+    if path is None:
         return _result(
             "app_token",
             "auth",
             False,
-            f"github-app-token script missing at {path}.",
+            f"github-app-token script not found (looked in {candidates[-1]} and siblings).",
         )
-    if not os.access(path, os.X_OK):
-        return _result("app_token", "auth", False, f"{path} not executable (chmod +x).")
     try:
-        run_external([path, "--help"], timeout=5, env={**os.environ})
+        run_external(["bash", path, "--help"], timeout=5, env={**os.environ})
         return _result("app_token", "auth", True, "github-app-token --help OK.")
     except RuntimeError as e:
         return _result("app_token", "auth", False, f"--help failed: {str(e)[:80]}")
 
 
 def check_recent_ships() -> CheckResult:
+    """Liveness probe for shipped sessions via the SAME DuckDB/HMAC path as real
+    ingestion (PF-26).
+
+    The old probe used `gsutil ls` (gcloud OAuth) while ingestion uses
+    DuckDB + HMAC — so an expired gcloud OAuth produced a false negative even
+    when the live path worked. Scope to the caller's own `dev=<dev>` partition
+    under the `v=2` layout; `org=*` here only enumerates the caller's own
+    filenames (a liveness count, not a cross-tenant content read).
+    """
+    try:
+        import duckdb
+    except ImportError:
+        return _result("recent_ships", "data", False, "duckdb module not importable.")
     settings = _load_settings()
     if settings is None:
         return _result("recent_ships", "data", False, _CONFIG_MISSING_DETAIL)
-    if not shutil.which("gsutil"):
+    key_id = _op_read(settings.hmac_akid_ref)
+    secret = _op_read(settings.hmac_secret_ref)
+    if not key_id or not secret:
         return _result(
             "recent_ships",
             "data",
             False,
-            "gsutil missing (`brew install google-cloud-sdk`).",
+            "HMAC pair unavailable from 1P (covered by hmac_1p probe).",
         )
     try:
         dev = identity.dev_id()
     except RuntimeError:
         return _result("recent_ships", "data", False, "git user.email empty — set it.")
-    url = f"{settings.gcs_bucket}/{config.GCS_RAW_PREFIX}/dev={dev}/"
+    pattern = (
+        f"{settings.gcs_bucket}/{config.GCS_RAW_PREFIX}/{config.GCS_LAYOUT_VERSION}"
+        f"/org=*/dev={dev}/proj=*/*.jsonl"
+    )
     try:
-        out = run_external(["gsutil", "ls", url], timeout=20, env={**os.environ})
-        lines = [ln for ln in out.strip().splitlines() if ln.strip()]
-        if not lines:
+        con = duckdb.connect(":memory:")
+        con.execute("INSTALL httpfs; LOAD httpfs;")
+        con.execute("CREATE SECRET (TYPE gcs, KEY_ID ?, SECRET ?);", [key_id, secret])
+        row = con.execute("SELECT count(*) FROM glob(?)", [pattern]).fetchone()
+        con.close()
+        n = int(row[0]) if row else 0
+        if not n:
             return _result(
                 "recent_ships",
                 "data",
                 False,
-                f"No shipped sessions found in {url}.",
+                f"No shipped sessions for dev={dev} in the {config.GCS_LAYOUT_VERSION} layout.",
             )
-        return _result("recent_ships", "data", True, f"{len(lines)} project(s) shipped.")
-    except RuntimeError as e:
+        return _result(
+            "recent_ships", "data", True, f"{n} shipped session file(s) via DuckDB/HMAC."
+        )
+    except Exception as e:  # pragma: no cover - defensive
         return _result(
             "recent_ships",
             "data",
             False,
-            f"gsutil ls failed: {str(e)[:80]}",
+            f"DuckDB glob failed: {type(e).__name__}: {str(e)[:80]}",
         )
 
 

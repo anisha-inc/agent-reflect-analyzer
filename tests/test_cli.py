@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
+import click
+import pytest
 from click.testing import CliRunner
 
 from analyzer import cli
@@ -59,6 +61,34 @@ def test_check_human_exits_zero_when_all_pass():
         result = CliRunner().invoke(cli.main, ["--check"])
     assert result.exit_code == 0
     assert "OK" in result.output
+
+
+def test_resolve_read_owner_from_repo_lowercased():
+    assert cli._resolve_read_owner("Qonversion/Dash-Mono") == "qonversion"
+
+
+def test_resolve_read_owner_from_default_org(monkeypatch):
+    class _S:
+        target_org_default = "Anisha-Inc"
+
+    monkeypatch.setattr(cli.config, "load_settings", lambda: _S())
+    assert cli._resolve_read_owner(None) == "anisha-inc"
+
+
+def test_resolve_read_owner_fail_closed_without_org(monkeypatch):
+    class _S:
+        target_org_default = None
+
+    monkeypatch.setattr(cli.config, "load_settings", lambda: _S())
+    with pytest.raises(click.UsageError):
+        cli._resolve_read_owner(None)
+
+
+def test_resolve_read_owner_rejects_injection_charset():
+    # owner segment contains shell/SQL metacharacters → must be rejected before
+    # it can reach the interpolated read glob.
+    with pytest.raises(click.UsageError):
+        cli._resolve_read_owner("foo';DROP/bar")
 
 
 def test_summary_table_renders_known_keys():

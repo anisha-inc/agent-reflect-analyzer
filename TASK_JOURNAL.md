@@ -11,108 +11,76 @@ identifiers — ticket IDs, internal tracker URLs, personal paths, vault names.
 
 - **linear-id:** internal — redacted (public repo)
 - **url:** internal — redacted (public repo)
-- **title:** Sub-2: code extraction → agent-reflect-analyzer v1.0.0
+- **title:** Sub-4.2b: analyzer tenant-isolation + emit/redaction hardening
 - **worktree:** local git worktree (path omitted — public repo)
 
 ## Goal
 
-Lift the `analyzer/` package from the internal source repo into this public
-repository and ship an immutable initial release `v1.0.0` — CI green on the
-tag commit and a clean-shell smoke run passing.
+Close cross-tenant read leakage in the public analyzer (filter session
+ingestion by org/proj on the read side), redact transcripts at-rest, fix
+app-token packaging on the uvx path, and chunk large sessions instead of
+dropping them — then ship a new semver release (`v1.0.1`+).
 
 ## Roadmap
 
-- [x] Step 1: Bootstrap worktree + verify target repo is public
-- [x] Step 2: Copy analyzer package + tests + templates (promote templates into package)
-- [x] Step 3: Pydantic Settings v2 strict env loader (`AGENT_REFLECT_*`, no defaults) + cross-cutting
-- [x] Step 4: `subprocess_util.run_external()` wrapper + migrate call sites + ruff guard
-- [x] Step 5: Audit stdout fallback when `CLAUDE_PLUGIN_DATA` unset
-- [x] Step 6: scrub-test pre-commit + forbidden-patterns + source cleanup pass
-- [x] Step 7: pytest-socket + STYLE.md + renovate.json
-- [x] Step 8: Reusable workflow + vendored github-app-token (sync-drift workflow → Follow-ups)
-- [x] Step 9: Slim CI (py-tests + ruff + scrub-test + subprocess-guard)
-- [x] Step 10: Lift release workflow AS-IS (+ bootstrap guard: idle until a tag exists)
-- [x] Step 11: LICENSE (MIT) + README + version bump to 1.0.0
-- [ ] Step 12: Final verification + initial-release PR + tag `v1.0.0`
+- [x] Step 1: PF-15/19 — org-scoped `v=2` read glob + fail-closed owner resolution (charset-validated) ✓ `50ef431`
+- [x] Step 2: PF-29 — prefer caller `GITHUB_TOKEN` over minted App token (dedup + emit) ✓ `aad8681`
+- [x] Step 3: PF-25 — package `github-app-token` in wheel (force-include) + invoke via `bash` ✓ `2e10780`
+- [x] Step 4: PF-26 — `recent_ships` probe via DuckDB/HMAC path (drop gsutil) ✓ `b0440b5`
+- [x] Step 5: PF-27 — chunk large sessions instead of dropping (fair-share) ✓ `3adbe77`
+- [x] Step 6: version bump 1.1.0 + README docs (org-scoping, fail-closed, packaging) ✓ `4e3e7c4` (+`uv.lock` sync)
+- [x] Step 7: create PR → https://github.com/anisha-inc/agent-reflect-analyzer/pull/2
 
 ## Decisions
 
-- Branch = the tracker's magic branch name so the PR auto-links to the issue.
-- Journal is kept in-repo (commit guard requires it) but scrubbed of internal
-  identifiers, since this repository is public.
-- Templates promoted into the package (`analyzer/templates/`) so the wheel
-  bundles them without a force-include.
-- `Settings` uses `NoDecode` + a before-validator to CSV-split the OAuth refs
-  from the singular `AGENT_REFLECT_OAUTH_TOKEN_REF` env var; an empty string
-  raises (verified in an isolated env). `extra="forbid"` does NOT reject
-  unknown prefixed env vars in this pydantic-settings version — so no test
-  asserts that.
-- `auth.read_*` thread `Settings` lazily (default arg), leaving the four
-  `llm/` call sites untouched; load failures degrade to None.
-- The scrub pattern list does NOT include bare `anisha`: the org slug
-  (`anisha-inc/...` in the README `uses:` line, LICENSE, settings.json) is
-  unavoidably public — the repo physically lives there. Genuinely-internal
-  identifiers are scrubbed by hand and enforced by the scrub-test gate.
-- Post-review remediation (after maintainer feedback): renamed the company-
-  prefixed op-token env var to the neutral `OP_SVC_TOKEN` (re-exported as the
-  standard `OP_SERVICE_ACCOUNT_TOKEN` for `op`); generalized the emitted-issue
-  template provenance. The scrub pattern list is NO LONGER committed (it would
-  be a consolidated internal-name leak) — it is sourced from a private GitHub
-  Actions secret `SCRUB_FORBIDDEN_PATTERNS` (provisioned via Terraform/Atlas,
-  masked in logs) in CI, or a local gitignored `.security/forbidden-patterns.txt` for
-  pre-commit; scrub-test skips with a warning when neither is present.
-  Also dropped the hardcoded `anisha-inc` default for `GH_APP_TARGET_ORG` in the
-  vendored token script — it is now required for discovery (the analyzer always
-  passes it; direct CLI use must set it or `GH_APP_INSTALLATION_ID`).
-
-- `run_external` gained `check=False` (returns the CompletedProcess) and `cwd`
-  beyond the plan's signature, so `llm/flatten` can keep inspecting `claude -p`
-  exit/stderr for quota detection without a bare `subprocess` import.
-- Ran `ruff format` once over `analyzer/`+`tests/` to establish the formatting
-  baseline and resolve `E501` in lifted code; `tests/**` ignores all `S` rules
-  (fixtures carry dummy tokens/temp paths/subprocess mocks).
-
-- scrub-test scans the diff of `analyzer/ tests/ scripts/ .github/` only (not the
-  pattern file or root docs); reports `file:line`. The smoke test builds its
-  forbidden fixture token at runtime so the literal never lands in a scanned
-  file. Source verified clean of all 7 patterns.
-- Vendored `scripts/github-app-token` makes `GH_APP_OP_ITEM` REQUIRED (no
-  internal-vault default), so nothing environment-specific is baked into a
-  public file. The reusable workflow adds a `gh_app_op_item` input to supply it.
-  This means the script body no longer matches the upstream byte-for-byte, so a
-  naive body-diff sync would fight the scrub — hence sync-vendored is deferred
-  and needs a scrub-aware transform (see Follow-ups).
-
-- Removed the `[tool.hatch.build.targets.wheel.force-include]` table entirely:
-  `analyzer/llm/prompts` is inside the package, so hatchling already bundles it
-  and the force-include caused a double-include build failure (`uv build`). The
-  wheel now bundles all `.j2` prompts + the issue template via default package
-  data. Verified `uv build` + `unzip -l` (33 files, templates present).
-
-- CI fix-ci #1: the 7 `test_redact` failures were presidio's `AnalyzerEngine()`
-  requiring a spaCy model (absent in CI → fail-open → nothing redacted), and its
-  `EmailRecognizer` fetching the public-suffix list via tldextract (blocked by
-  `--disable-socket`). Fix: run pure-regex recognizers directly (no
-  `AnalyzerEngine`) + a self-contained `EMAIL_ADDRESS` regex. Fully offline;
-  verified all 8 `test_redact` pass under socket lockdown with presidio installed.
+- **[Scope] Redaction descoped (owner, this task).** PF-22 (redact-at-rest) and
+  PF-28 (redaction/dedup decoupling) are out of scope — owner: "пока не редактировать
+  вообще". Existing emit-redaction is left exactly as-is (not expanded, not decoupled,
+  not removed). At-rest redaction → infra/separate task (Follow-ups).
+- **[Arch] Read side moves to `v=2/org=` and stops reading legacy `raw/dev=*/proj=*`.**
+  Legacy un-partitioned data is cross-tenant-contaminated; reading it would reintroduce
+  PF-15. Owner derived from `--repo` (else `AGENT_REFLECT_TARGET_ORG_DEFAULT`), no org ⇒
+  fail-closed. Shared `v=2/org=<owner>` layout contract with the paired plugins (write)
+  task.
+- **[Security] Owner is interpolated into the DuckDB glob/SQL** → validate against the
+  GitHub-org charset (`^[a-z0-9](?:[a-z0-9-]{0,38})$`) before interpolation; keep the
+  `S608` ruff-ignore with an updated comment.
+- **[Build] `bash`-invoke the vendored script.** `force-include` does not preserve the
+  exec bit, so `mint`/`check` run `bash <github-app-token>` rather than the path directly.
+- **[Release] v1.1.0 (minor)** — new behaviour, not only bugfixes.
 
 ## Dead Ends
 
+- **CI ruff-job ≠ local `ruff check`.** First CI run was red on `ruff`: the job
+  runs **two** pinned commands — `uvx ruff@0.15.15 check` AND `uvx ruff@0.15.15
+  format --check`. Local `uv run ruff check` passed but `format --check` flagged
+  3 edited files. Fix: `uvx ruff@0.15.15 format analyzer tests`. For future:
+  always run `ruff format --check` (pinned version) before pushing.
+
 ## Next Action
 
-PR #1 open and **CI fully green** (ruff, scrub-test, py-tests, subprocess-guard,
-status). One fix-ci iteration applied (offline redact). PR is MERGEABLE but
-`REVIEW_REQUIRED` (branch protection). REMAINING (irreversible, awaiting explicit
-confirmation): squash-merge → `git checkout main && git pull` →
-`git tag -a v1.0.0 -m "..."` → `git push origin v1.0.0` →
-`gh release create v1.0.0 --target <main sha>`. Then verify
-`gh release view v1.0.0` + clean-shell `uv run --from git+...@v1.0.0
-analyzer-cli --check --json` → exit 0.
+All 7 steps done. **PR #2 open, CI fully green** (py-tests, ruff, subprocess-guard, scrub-test,
+status — fails=0 after one ruff-format fix iteration), **0 reviewer comments**. Ready for
+`/finish-task` once the lockstep release is coordinated.
+
+⚠️ Release-ordering: merge + release `v1.1.0` **in lockstep** with the paired plugins (write
+`v=2`) PR; re-pin the plugins shim/template to `@v1.1.0` in a separate PR. Post-merge: tag
+`v1.1.0`, push, `gh release create`.
+
+**Evidence (per-node, CI):** unit suite 122 passed offline; `uv build` bundles
+`analyzer/scripts/github-app-token`; `analyzer-cli --check --json` shows `app_token=OK` via the
+new `bash` invocation. **Feature-level acceptance STILL PENDING** — cross-org dry-run with zero
+foreign candidates + uvx `--check app_token=OK` must be run against the live GCS bucket in the
+dogfood environment (SPD-139 setup); not closeable from CI.
 
 ## Follow-ups
 
-- Add a `sync-vendored-scripts` workflow (weekly drift check of
-  `scripts/github-app-token` vs the internal upstream) with a scrub-aware
-  transform that re-applies the `GH_APP_OP_ITEM`-required adaptation, plus the
-  `strip-vendor-header.py` / `refresh-vendor.py` helpers. Needs `VENDOR_SYNC_TOKEN`
-  provisioned for this repo. Deferred from Step 8 (not v1.0.0-acceptance-blocking).
+- **PF-22 redact-at-rest (deferred, owner decision).** Transcripts sit unredacted in the
+  bucket; true at-rest redaction needs a write-side / infra ingestion step (the paired
+  plugins task chose NOT to redact in ship.sh). Track as infra.
+- **PF-28 redaction/dedup decoupling (deferred).** Emit-redaction shares a `try/except`
+  with dedup in `run.py` — a dedup failure silently skips the scrub. Decouple when
+  redaction work is picked up again.
+- **PF-19 per-org scoped HMAC read-creds (infra).** Code side now requests a single
+  `org=<owner>` prefix; true isolation needs prefix-scoped HMAC keys per org provisioned
+  in infra (Terraform/Atlas) — out of this repo.

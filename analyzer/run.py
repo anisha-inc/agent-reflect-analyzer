@@ -19,6 +19,7 @@ def run_pipeline(
     since: str,
     limit: int,
     repo: str | None,
+    read_owner: str,
     emit_issues: bool,
     top_k: int,
     strategy: str,
@@ -44,9 +45,9 @@ def run_pipeline(
         try:
             con = duckdb_query.connect()
             duck_started = time.time()
-            sessions = duckdb_query.load_sessions(con, since=since, limit=limit)
+            sessions = duckdb_query.load_sessions(con, since=since, limit=limit, owner=read_owner)
             events_by_session = duckdb_query.load_events_for_sessions(
-                con, [s["sessionId"] for s in sessions]
+                con, [s["sessionId"] for s in sessions], owner=read_owner
             )
             record.duckdb_wall_s = round(time.time() - duck_started, 2)
             con.close()
@@ -113,13 +114,14 @@ def run_pipeline(
 
     if candidates and emit_issues and repo:
         try:
-            token = None
-            try:
-                from . import auth, util
+            from . import auth, util
 
-                token = auth.mint_github_token(target_org=util.parse_owner(repo))
-            except RuntimeError as e:
-                record.warnings.append(f"mint_token_failed: {e}")
+            # Prefer the caller's ambient github.token; mint as fallback (PF-29).
+            token = auth.resolve_github_token(target_org=util.parse_owner(repo))
+            if token is None:
+                record.warnings.append(
+                    "gh_token_unavailable: no GH_TOKEN/GITHUB_TOKEN and App-token mint failed"
+                )
             for c in candidates:
                 url = _issues_mod.emit_issue(c, repo=repo, token=token, dry_run=False)
                 if url:
