@@ -38,16 +38,14 @@ def fetch_open_issues(
     Closed issues from N days ago are appended when `include_closed_since` is
     set (e.g. "30d") so that recently-resolved patterns aren't re-emitted.
 
-    When no token is supplied, mint one scoped to the repo owner; on failure
-    fall back to the ambient `gh` auth in the environment.
+    When no token is supplied, prefer the caller's ambient `GH_TOKEN`/
+    `GITHUB_TOKEN` and only mint an org-scoped App token as a fallback (PF-29) —
+    so server-side cross-org dedup uses the caller repo's own `github.token`.
     """
     if token is None:
         from . import auth, util
 
-        try:
-            token = auth.mint_github_token(target_org=util.parse_owner(repo))
-        except RuntimeError:
-            token = None  # fall back to ambient gh auth
+        token = auth.resolve_github_token(target_org=util.parse_owner(repo))
 
     env = {**os.environ}
     if token:

@@ -69,6 +69,27 @@ def test_emit_issue_calls_gh_with_body_file(tmp_path):
         assert "--body-file" in args
 
 
+def test_emit_issue_resolves_token_when_none():
+    fake_url = "https://github.com/octo-org/octo-repo/issues/9\n"
+    with (
+        patch.object(issues.auth, "resolve_github_token", return_value="ghs_resolved") as res,
+        patch.object(issues, "run_external", return_value=fake_url),
+    ):
+        url = issues.emit_issue(_cand(), repo="octo-org/octo-repo", dry_run=False)
+    assert url == fake_url.strip()
+    res.assert_called_once()
+
+
+def test_emit_issue_raises_without_any_token():
+    with patch.object(issues.auth, "resolve_github_token", return_value=None):
+        try:
+            issues.emit_issue(_cand(), repo="octo-org/octo-repo", dry_run=False)
+        except RuntimeError as e:
+            assert "no GitHub token available" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+
 def test_emit_issue_propagates_gh_failure():
     with patch.object(issues, "run_external", side_effect=RuntimeError("rate limit")):
         try:

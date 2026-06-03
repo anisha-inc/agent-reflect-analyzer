@@ -46,3 +46,32 @@ def test_mint_raises_on_empty_stdout(monkeypatch):
         sp.return_value.exists.return_value = True
         with pytest.raises(RuntimeError, match="empty stdout"):
             auth.mint_github_token(target_org="octo")
+
+
+def test_resolve_prefers_ambient_gh_token(monkeypatch):
+    monkeypatch.setenv("GH_TOKEN", "ambient-gh")
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    # Ambient token present → mint must NOT be called (PF-29).
+    with patch.object(auth, "mint_github_token", side_effect=AssertionError("mint called")):
+        assert auth.resolve_github_token(target_org="octo") == "ambient-gh"
+
+
+def test_resolve_prefers_ambient_github_token(monkeypatch):
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.setenv("GITHUB_TOKEN", "ambient-actions")
+    with patch.object(auth, "mint_github_token", side_effect=AssertionError("mint called")):
+        assert auth.resolve_github_token(target_org="octo") == "ambient-actions"
+
+
+def test_resolve_falls_back_to_mint(monkeypatch):
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    with patch.object(auth, "mint_github_token", return_value="ghs_minted"):
+        assert auth.resolve_github_token(target_org="octo") == "ghs_minted"
+
+
+def test_resolve_returns_none_when_mint_fails(monkeypatch):
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    with patch.object(auth, "mint_github_token", side_effect=RuntimeError("no op token")):
+        assert auth.resolve_github_token(target_org="octo") is None

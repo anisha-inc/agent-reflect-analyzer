@@ -116,13 +116,14 @@ def run_pipeline(
 
     if candidates and emit_issues and repo:
         try:
-            token = None
-            try:
-                from . import auth, util
+            from . import auth, util
 
-                token = auth.mint_github_token(target_org=util.parse_owner(repo))
-            except RuntimeError as e:
-                record.warnings.append(f"mint_token_failed: {e}")
+            # Prefer the caller's ambient github.token; mint as fallback (PF-29).
+            token = auth.resolve_github_token(target_org=util.parse_owner(repo))
+            if token is None:
+                record.warnings.append(
+                    "gh_token_unavailable: no GH_TOKEN/GITHUB_TOKEN and App-token mint failed"
+                )
             for c in candidates:
                 url = _issues_mod.emit_issue(c, repo=repo, token=token, dry_run=False)
                 if url:

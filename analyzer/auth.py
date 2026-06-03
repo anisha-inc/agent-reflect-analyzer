@@ -84,6 +84,26 @@ def _script_path() -> pathlib.Path:
     return here.parent.parent / "scripts" / "github-app-token"
 
 
+def resolve_github_token(*, target_org: str) -> str | None:
+    """Resolve a GitHub token, preferring a caller-provided ambient token over
+    minting an org-scoped App token (PF-29).
+
+    Server-side, the reusable workflow exports the caller repo's own
+    ``GH_TOKEN``/``GITHUB_TOKEN`` (``github.token``) — which can read/write that
+    org's private repos. Minting the analyzer's own App token first would shadow
+    that correct token and break cross-org dedup/emit (the App isn't installed
+    on the caller org). So: ambient token wins; mint only as a fallback when no
+    ambient token is present. Returns None when neither source is available.
+    """
+    ambient = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if ambient:
+        return ambient
+    try:
+        return mint_github_token(target_org=target_org)
+    except RuntimeError:
+        return None
+
+
 def mint_github_token(*, target_org: str, timeout_s: int = 30) -> str:
     """Return an installation token for ``target_org``. Raises on failure."""
     if "OP_SVC_TOKEN" not in os.environ:

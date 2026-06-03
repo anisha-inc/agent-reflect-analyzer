@@ -95,7 +95,12 @@ def emit_issue(
         return None
 
     if token is None:
-        token = auth.mint_github_token(target_org=util.parse_owner(repo))
+        token = auth.resolve_github_token(target_org=util.parse_owner(repo))
+    if token is None:
+        raise RuntimeError(
+            "no GitHub token available — set GH_TOKEN/GITHUB_TOKEN, or "
+            "OP_SVC_TOKEN + GH_APP_OP_ITEM to mint an App token (PF-29)."
+        )
 
     env = {**os.environ, "GH_TOKEN": token}
     _ensure_label(repo, env)

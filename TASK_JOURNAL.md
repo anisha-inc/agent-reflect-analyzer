@@ -23,7 +23,7 @@ dropping them — then ship a new semver release (`v1.0.1`+).
 
 ## Roadmap
 
-- [ ] Step 1: PF-15/19 — org-scoped `v=2` read glob + fail-closed owner resolution (charset-validated)
+- [x] Step 1: PF-15/19 — org-scoped `v=2` read glob + fail-closed owner resolution (charset-validated) ✓ `50ef431`
 - [ ] Step 2: PF-29 — prefer caller `GITHUB_TOKEN` over minted App token (dedup + emit)
 - [ ] Step 3: PF-25 — package `github-app-token` in wheel (force-include) + invoke via `bash`
 - [ ] Step 4: PF-26 — `recent_ships` probe via DuckDB/HMAC path (drop gsutil)
