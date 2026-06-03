@@ -27,8 +27,8 @@ dropping them — then ship a new semver release (`v1.0.1`+).
 - [x] Step 2: PF-29 — prefer caller `GITHUB_TOKEN` over minted App token (dedup + emit) ✓ `aad8681`
 - [x] Step 3: PF-25 — package `github-app-token` in wheel (force-include) + invoke via `bash` ✓ `2e10780`
 - [x] Step 4: PF-26 — `recent_ships` probe via DuckDB/HMAC path (drop gsutil) ✓ `b0440b5`
-- [x] Step 5: PF-27 — chunk large sessions instead of dropping (fair-share) ✓ (commit below)
-- [ ] Step 6: version bump 1.1.0 + README docs (org-scoping, fail-closed, packaging)
+- [x] Step 5: PF-27 — chunk large sessions instead of dropping (fair-share) ✓ `3adbe77`
+- [x] Step 6: version bump 1.1.0 + README docs (org-scoping, fail-closed, packaging) ✓ (commit below)
 - [ ] Step 7: create PR
 
 ## Decisions
@@ -53,10 +53,12 @@ dropping them — then ship a new semver release (`v1.0.1`+).
 
 ## Next Action
 
-Implementing via `/implement-task` (auto mode). Start at Step 1 (PF-15/19 org-scoped read).
-Plan saved as a Linear document on the issue. ⚠️ Release-ordering: merge + release `v1.1.0`
-**in lockstep** with the paired plugins (write `v=2`) PR; re-pin the plugins shim/template
-to `@v1.1.0` in a separate PR.
+Steps 1-6 implemented + committed; full suite green (122 passed), ruff clean, `uv build`
+bundles `analyzer/scripts/github-app-token`. Next: Step 7 — open the PR via `/pr`, then the
+wait-CI / triage loop. ⚠️ Release-ordering: merge + release `v1.1.0` **in lockstep** with the
+paired plugins (write `v=2`) PR; re-pin the plugins shim/template to `@v1.1.0` in a separate
+PR. Feature-level acceptance (cross-org dry-run with zero foreign candidates; uvx `--check`
+`app_token=OK`) requires a live bucket run in the dogfood environment.
 
 ## Follow-ups
 
