@@ -207,8 +207,7 @@ def _fit_session_to_budget(
     s = _shrink_session(s)
     turns = s.get("turns") or []
     while len(turns) > 2 and (
-        len(_render_user_prompt([{**s, "turns": turns}], dev_id, proj_id).encode("utf-8"))
-        > budget
+        len(_render_user_prompt([{**s, "turns": turns}], dev_id, proj_id).encode("utf-8")) > budget
     ):
         mid = len(turns) // 2
         turns = turns[:mid] + turns[mid + 1 :]

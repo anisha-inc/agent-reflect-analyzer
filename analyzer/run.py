@@ -45,9 +45,7 @@ def run_pipeline(
         try:
             con = duckdb_query.connect()
             duck_started = time.time()
-            sessions = duckdb_query.load_sessions(
-                con, since=since, limit=limit, owner=read_owner
-            )
+            sessions = duckdb_query.load_sessions(con, since=since, limit=limit, owner=read_owner)
             events_by_session = duckdb_query.load_events_for_sessions(
                 con, [s["sessionId"] for s in sessions], owner=read_owner
             )

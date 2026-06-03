@@ -87,9 +87,7 @@ def _glob(owner: str) -> str:
     )
 
 
-def fetch_raw(
-    con, since: str, owner: str, hard_limit: int | None = None
-) -> list[dict[str, Any]]:
+def fetch_raw(con, since: str, owner: str, hard_limit: int | None = None) -> list[dict[str, Any]]:
     """Pull raw JSONL rows from GCS within `since` window, scoped to `owner`.
 
     Returns a list of dicts with original event shape preserved.

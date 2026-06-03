@@ -51,6 +51,12 @@ dropping them — then ship a new semver release (`v1.0.1`+).
 
 ## Dead Ends
 
+- **CI ruff-job ≠ local `ruff check`.** First CI run was red on `ruff`: the job
+  runs **two** pinned commands — `uvx ruff@0.15.15 check` AND `uvx ruff@0.15.15
+  format --check`. Local `uv run ruff check` passed but `format --check` flagged
+  3 edited files. Fix: `uvx ruff@0.15.15 format analyzer tests`. For future:
+  always run `ruff format --check` (pinned version) before pushing.
+
 ## Next Action
 
 Steps 1-6 implemented + committed; full suite green (122 passed), ruff clean, `uv build`
