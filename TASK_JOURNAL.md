@@ -29,7 +29,7 @@ dropping them — then ship a new semver release (`v1.0.1`+).
 - [x] Step 4: PF-26 — `recent_ships` probe via DuckDB/HMAC path (drop gsutil) ✓ `b0440b5`
 - [x] Step 5: PF-27 — chunk large sessions instead of dropping (fair-share) ✓ `3adbe77`
 - [x] Step 6: version bump 1.1.0 + README docs (org-scoping, fail-closed, packaging) ✓ `4e3e7c4` (+`uv.lock` sync)
-- [ ] Step 7: create PR
+- [x] Step 7: create PR → https://github.com/anisha-inc/agent-reflect-analyzer/pull/2
 
 ## Decisions
 
@@ -59,12 +59,19 @@ dropping them — then ship a new semver release (`v1.0.1`+).
 
 ## Next Action
 
-Steps 1-6 implemented + committed; full suite green (122 passed), ruff clean, `uv build`
-bundles `analyzer/scripts/github-app-token`. Next: Step 7 — open the PR via `/pr`, then the
-wait-CI / triage loop. ⚠️ Release-ordering: merge + release `v1.1.0` **in lockstep** with the
-paired plugins (write `v=2`) PR; re-pin the plugins shim/template to `@v1.1.0` in a separate
-PR. Feature-level acceptance (cross-org dry-run with zero foreign candidates; uvx `--check`
-`app_token=OK`) requires a live bucket run in the dogfood environment.
+All 7 steps done. **PR #2 open, CI fully green** (py-tests, ruff, subprocess-guard, scrub-test,
+status — fails=0 after one ruff-format fix iteration), **0 reviewer comments**. Ready for
+`/finish-task` once the lockstep release is coordinated.
+
+⚠️ Release-ordering: merge + release `v1.1.0` **in lockstep** with the paired plugins (write
+`v=2`) PR; re-pin the plugins shim/template to `@v1.1.0` in a separate PR. Post-merge: tag
+`v1.1.0`, push, `gh release create`.
+
+**Evidence (per-node, CI):** unit suite 122 passed offline; `uv build` bundles
+`analyzer/scripts/github-app-token`; `analyzer-cli --check --json` shows `app_token=OK` via the
+new `bash` invocation. **Feature-level acceptance STILL PENDING** — cross-org dry-run with zero
+foreign candidates + uvx `--check app_token=OK` must be run against the live GCS bucket in the
+dogfood environment (SPD-139 setup); not closeable from CI.
 
 ## Follow-ups
 
