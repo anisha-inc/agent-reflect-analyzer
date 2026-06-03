@@ -70,18 +70,26 @@ def read_anthropic_api_key(settings: Settings | None = None) -> str | None:
 
 
 def _script_path() -> pathlib.Path:
-    """Return path to the vendored github-app-token script.
+    """Return the path to the vendored github-app-token script.
 
-    Repo layout:
-        scripts/github-app-token        ← target
-        analyzer/auth.py                ← __file__
+    Resolution order (first existing wins):
+      1. ``$CLAUDE_PLUGIN_ROOT/scripts/github-app-token`` — plugin install.
+      2. ``analyzer/scripts/github-app-token`` next to this file — bundled into
+         the wheel via force-include (PF-25), the uvx / installed path.
+      3. ``scripts/github-app-token`` at repo root — source checkout.
+    Falls back to (3) so the "not found" error points at the source layout.
     """
+    here = pathlib.Path(__file__).resolve()
+    candidates: list[pathlib.Path] = []
     plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
     if plugin_root:
-        return pathlib.Path(plugin_root) / "scripts" / "github-app-token"
-    # Fallback for source checkouts: __file__ is analyzer/auth.py at repo root.
-    here = pathlib.Path(__file__).resolve()
-    return here.parent.parent / "scripts" / "github-app-token"
+        candidates.append(pathlib.Path(plugin_root) / "scripts" / "github-app-token")
+    candidates.append(here.parent / "scripts" / "github-app-token")  # packaged wheel
+    candidates.append(here.parent.parent / "scripts" / "github-app-token")  # source checkout
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[-1]
 
 
 def resolve_github_token(*, target_org: str) -> str | None:
@@ -113,7 +121,8 @@ def mint_github_token(*, target_org: str, timeout_s: int = 30) -> str:
         raise RuntimeError(f"vendored github-app-token not found at {script}")
     env = {**os.environ, "GH_APP_TARGET_ORG": target_org}
     try:
-        out = run_external([str(script)], timeout=timeout_s, env=env).strip()
+        # Invoke via `bash` — the wheel-bundled copy isn't marked executable.
+        out = run_external(["bash", str(script)], timeout=timeout_s, env=env).strip()
     except RuntimeError as e:
         raise RuntimeError(f"github-app-token failed: {e}") from e
     if not out:

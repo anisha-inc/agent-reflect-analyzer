@@ -75,3 +75,11 @@ def test_resolve_returns_none_when_mint_fails(monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     with patch.object(auth, "mint_github_token", side_effect=RuntimeError("no op token")):
         assert auth.resolve_github_token(target_org="octo") is None
+
+
+def test_script_path_resolves_to_existing_script(monkeypatch):
+    # Source checkout: candidate 3 (repo-root scripts/github-app-token) exists.
+    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+    p = auth._script_path()
+    assert p.name == "github-app-token"
+    assert p.exists()

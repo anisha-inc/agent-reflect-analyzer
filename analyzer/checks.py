@@ -96,22 +96,26 @@ def check_gh_cli() -> CheckResult:
 
 
 def check_app_token_script() -> CheckResult:
+    # Resolution order mirrors auth._script_path: plugin → packaged wheel →
+    # source checkout. The wheel-bundled copy (PF-25) isn't marked executable,
+    # so we don't require os.X_OK and invoke via `bash <path>`.
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates: list[str] = []
     plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
     if plugin_root:
-        path = os.path.join(plugin_root, "scripts", "github-app-token")
-    else:
-        path = os.path.join(os.path.dirname(__file__), "..", "scripts", "github-app-token")
-    if not os.path.isfile(path):
+        candidates.append(os.path.join(plugin_root, "scripts", "github-app-token"))
+    candidates.append(os.path.join(here, "scripts", "github-app-token"))  # packaged wheel
+    candidates.append(os.path.join(here, "..", "scripts", "github-app-token"))  # source checkout
+    path = next((p for p in candidates if os.path.isfile(p)), None)
+    if path is None:
         return _result(
             "app_token",
             "auth",
             False,
-            f"github-app-token script missing at {path}.",
+            f"github-app-token script not found (looked in {candidates[-1]} and siblings).",
         )
-    if not os.access(path, os.X_OK):
-        return _result("app_token", "auth", False, f"{path} not executable (chmod +x).")
     try:
-        run_external([path, "--help"], timeout=5, env={**os.environ})
+        run_external(["bash", path, "--help"], timeout=5, env={**os.environ})
         return _result("app_token", "auth", True, "github-app-token --help OK.")
     except RuntimeError as e:
         return _result("app_token", "auth", False, f"--help failed: {str(e)[:80]}")

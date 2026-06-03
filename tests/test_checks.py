@@ -36,6 +36,15 @@ def test_run_all_emits_8_probes():
     }
 
 
+def test_check_app_token_script_ok_via_bash(monkeypatch):
+    # PF-25: the probe finds the script and runs `bash <path> --help` without
+    # requiring the executable bit (force-included wheel copies aren't +x).
+    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+    r = checks.check_app_token_script()
+    assert r["id"] == "app_token"
+    assert r["ok"] is True, r
+
+
 def test_all_ok_reflects_results():
     fake_ok = [{"id": "x", "category": "y", "ok": True, "detail": ""}]
     fake_fail = [{"id": "x", "category": "y", "ok": False, "detail": ""}]
