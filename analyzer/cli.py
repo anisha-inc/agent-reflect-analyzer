@@ -7,12 +7,44 @@ Full pipeline is invoked in `run()` below; --check is a short-circuit probe path
 from __future__ import annotations
 
 import json
+import re
 import sys
 
 import click
 from pydantic import ValidationError
 
-from . import audit, checks, config
+from . import audit, checks, config, util
+
+# GitHub org/user login charset: alphanumeric + single hyphens, 1-39 chars, no
+# leading hyphen. The resolved owner is interpolated into the DuckDB read glob,
+# so it must be validated to this charset before it reaches the SQL string.
+_OWNER_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38})$")
+
+
+def _resolve_read_owner(repo: str | None) -> str:
+    """Resolve the single org the bucket read is scoped to (tenant isolation).
+
+    Owner = ``parse_owner(--repo)`` when ``--repo owner/name`` is given, else
+    ``AGENT_REFLECT_TARGET_ORG_DEFAULT``. Neither present ⇒ fail closed (refuse
+    to read every org's sessions, PF-15). The result is lowercased and charset-
+    validated before it is interpolated into the read glob (PF-19 / injection).
+    """
+    if repo and "/" in repo:
+        owner = util.parse_owner(repo).lower()
+    else:
+        try:
+            owner = (config.load_settings().target_org_default or "").strip().lower()
+        except ValidationError:
+            owner = ""
+    if not owner:
+        raise click.UsageError(
+            "read scope requires an org: pass --repo owner/name "
+            "(or set AGENT_REFLECT_TARGET_ORG_DEFAULT). "
+            "Refusing to read all orgs — tenant isolation (PF-15)."
+        )
+    if not _OWNER_RE.match(owner):
+        raise click.UsageError(f"invalid org owner {owner!r} for bucket read scope.")
+    return owner
 
 
 def _resolve_repo(repo: str | None, *, emit_issues: bool) -> str | None:
@@ -146,6 +178,9 @@ def main(
         sys.exit(_emit_check(results, json_out))
 
     repo = _resolve_repo(repo, emit_issues=emit_issues)
+    # Tenant-isolation: scope the bucket read to one org. Fails closed when no
+    # org is resolvable (no --repo and no AGENT_REFLECT_TARGET_ORG_DEFAULT).
+    read_owner = _resolve_read_owner(repo)
 
     # Full pipeline (Steps 5-8) lives in analyzer.run.run_pipeline. Import lazily
     # so that --check (the hot path called by skill on every invocation) doesn't
@@ -163,6 +198,7 @@ def main(
         since=since,
         limit=limit,
         repo=repo,
+        read_owner=read_owner,
         emit_issues=emit_issues,
         top_k=top_k,
         strategy=strategy,

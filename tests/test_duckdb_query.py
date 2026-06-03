@@ -125,8 +125,22 @@ def test_load_sessions_filters_reflect_sessions():
                 ),
             ]
 
-    sessions = duckdb_query.load_sessions(FakeCon(), since="7d", limit=10)
+    sessions = duckdb_query.load_sessions(FakeCon(), since="7d", limit=10, owner="acme")
     # sess-A is dropped by the reflect filter.
     sids = [s["sessionId"] for s in sessions]
     assert sids == ["sess-B"]
     assert sessions[0]["tool_calls"] == 1
+
+
+def test_glob_is_org_scoped_to_v2_layout(monkeypatch):
+    """PF-15: the read glob targets one `org=<owner>` partition under v=2, never
+    a bucket-wide `org=*` / `dev=*` across tenants."""
+    from analyzer import config
+
+    class _S:
+        gcs_bucket = "gs://my-bucket"
+
+    monkeypatch.setattr(config, "load_settings", lambda: _S())
+    glob = duckdb_query._glob("qonversion")
+    assert glob == "gs://my-bucket/raw/v=2/org=qonversion/dev=*/proj=*/*.jsonl"
+    assert "org=*" not in glob
