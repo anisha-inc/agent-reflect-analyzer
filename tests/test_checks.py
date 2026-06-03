@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+import sys
 
-from analyzer import checks
+from analyzer import checks, identity
 
 
 def test_each_probe_returns_required_fields():
@@ -43,6 +44,40 @@ def test_check_app_token_script_ok_via_bash(monkeypatch):
     r = checks.check_app_token_script()
     assert r["id"] == "app_token"
     assert r["ok"] is True, r
+
+
+def test_recent_ships_uses_duckdb_glob_v2_layout(monkeypatch):
+    # PF-26: probe via DuckDB/HMAC glob (not gsutil), scoped to the caller's own
+    # dev= partition under the v=2 layout.
+    class _S:
+        gcs_bucket = "gs://b"
+        hmac_akid_ref = "op://a"
+        hmac_secret_ref = "op://s"
+
+    captured: dict = {}
+
+    class _Con:
+        def execute(self, sql, params=None):
+            if sql.lstrip().upper().startswith("SELECT COUNT"):
+                captured["pattern"] = params[0]
+            return self
+
+        def fetchone(self):
+            return (3,)
+
+        def close(self):
+            pass
+
+    fake_duckdb = type("M", (), {"connect": staticmethod(lambda *a, **k: _Con())})()
+    monkeypatch.setitem(sys.modules, "duckdb", fake_duckdb)
+    monkeypatch.setattr(checks, "_load_settings", lambda: _S())
+    monkeypatch.setattr(checks, "_op_read", lambda ref: "x" * 60)
+    monkeypatch.setattr(identity, "dev_id", lambda: "abc123")
+
+    r = checks.check_recent_ships()
+    assert r["ok"] is True, r
+    assert captured["pattern"] == "gs://b/raw/v=2/org=*/dev=abc123/proj=*/*.jsonl"
+    assert "DuckDB/HMAC" in r["detail"]
 
 
 def test_all_ok_reflects_results():
