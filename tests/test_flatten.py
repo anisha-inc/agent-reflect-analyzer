@@ -7,7 +7,12 @@ of the budget so every top-K session stays represented.
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
+import pytest
+
 from analyzer.llm import flatten
+from analyzer.subprocess_util import ExecutableNotFoundError
 
 
 def _turn(text: str) -> dict:
@@ -69,3 +74,17 @@ def test_chunk_empty_is_noop():
     fitted, chunked = flatten._chunk_sessions_to_budget([], "dev", "proj", 10_000)
     assert fitted == []
     assert chunked == []
+
+
+def test_missing_claude_propagates_executable_not_found(monkeypatch):
+    # Regression: a missing `claude` binary must propagate as
+    # ExecutableNotFoundError — not wrapped in OpusInvocationError, not retried by
+    # tenacity, not swallowed into a green run.
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "x")
+    with patch.object(
+        flatten,
+        "run_external",
+        side_effect=ExecutableNotFoundError("executable not found: claude"),
+    ):
+        with pytest.raises(ExecutableNotFoundError):
+            flatten._call_claude_subprocess("sys prompt", "user prompt", "claude-opus-4-7")

@@ -11,6 +11,7 @@ import time
 from typing import Any
 
 from . import audit
+from .subprocess_util import ExecutableNotFoundError
 
 
 def run_pipeline(
@@ -79,6 +80,8 @@ def run_pipeline(
                 strategy=strategy,
                 since=since,
             )
+        except ExecutableNotFoundError:
+            raise  # missing executable = fatal env misconfig, fail loud
         except Exception as e:  # pragma: no cover - real-deps path
             record.warnings.append(f"llm_pipeline_failed: {type(e).__name__}: {e}")
 
@@ -101,6 +104,8 @@ def run_pipeline(
             kept = [redact.redact_candidate(c, record=record) for c in kept]
             record.candidates_after_redact = len(kept)
             candidates = kept
+        except ExecutableNotFoundError:
+            raise  # missing executable = fatal env misconfig, fail loud
         except Exception as e:  # pragma: no cover - real-deps path
             record.warnings.append(f"dedup_redact_failed: {type(e).__name__}: {e}")
             record.candidates_after_dedup = len(candidates)
@@ -127,6 +132,8 @@ def run_pipeline(
                 if url:
                     record.issue_urls.append(url)
             record.issues_emitted = len(record.issue_urls)
+        except ExecutableNotFoundError:
+            raise  # missing executable = fatal env misconfig, fail loud
         except Exception as e:  # pragma: no cover - real-deps path
             record.warnings.append(f"emit_failed: {type(e).__name__}: {e}")
 

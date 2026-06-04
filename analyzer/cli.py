@@ -14,6 +14,7 @@ import click
 from pydantic import ValidationError
 
 from . import audit, checks, config, util
+from .subprocess_util import ExecutableNotFoundError
 
 # GitHub org/user login charset: alphanumeric + single hyphens, 1-39 chars, no
 # leading hyphen. The resolved owner is interpolated into the DuckDB read glob,
@@ -193,23 +194,29 @@ def main(
         top_k=top_k,
         strategy=strategy,
     )
-    summary = run_pipeline(
-        record=record,
-        since=since,
-        limit=limit,
-        repo=repo,
-        read_owner=read_owner,
-        emit_issues=emit_issues,
-        top_k=top_k,
-        strategy=strategy,
-        model_top_k=model_top_k,
-        model_rest=model_rest,
-        concurrency=concurrency,
-        cluster=cluster,
-        include_closed_since=include_closed_since,
-        api_key_fallback=api_key_fallback,
-        verbose=verbose,
-    )
+    try:
+        summary = run_pipeline(
+            record=record,
+            since=since,
+            limit=limit,
+            repo=repo,
+            read_owner=read_owner,
+            emit_issues=emit_issues,
+            top_k=top_k,
+            strategy=strategy,
+            model_top_k=model_top_k,
+            model_rest=model_rest,
+            concurrency=concurrency,
+            cluster=cluster,
+            include_closed_since=include_closed_since,
+            api_key_fallback=api_key_fallback,
+            verbose=verbose,
+        )
+    except ExecutableNotFoundError as e:
+        # A required external binary (e.g. `claude`) is missing → fatal env
+        # misconfig. Exit non-zero so CI goes red instead of fake-green with 0
+        # findings. Transient/runtime failures stay fail-soft inside run_pipeline.
+        raise click.ClickException(str(e)) from e
     audit_log = audit.write_audit(record)
     summary["audit_log"] = str(audit_log) if audit_log is not None else "stdout"
 

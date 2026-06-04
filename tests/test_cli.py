@@ -108,3 +108,18 @@ def test_summary_table_renders_known_keys():
     assert "sessions analyzed" in table
     assert "5" in table
     assert "/tmp/foo" in table
+
+
+def test_missing_executable_exits_nonzero():
+    # Regression: a missing external executable (e.g. `claude`) must fail the run
+    # with a non-zero exit, not fake-green with 0 findings (CI must go red).
+    from analyzer import run as run_mod
+    from analyzer.subprocess_util import ExecutableNotFoundError
+
+    with patch.object(
+        run_mod,
+        "run_pipeline",
+        side_effect=ExecutableNotFoundError("executable not found: claude"),
+    ):
+        result = CliRunner().invoke(cli.main, ["--repo", "anisha-inc/plugins"])
+    assert result.exit_code != 0

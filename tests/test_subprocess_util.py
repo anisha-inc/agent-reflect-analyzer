@@ -80,3 +80,12 @@ def test_missing_executable_becomes_runtime_error():
     with patch.object(subprocess_util.subprocess, "run", side_effect=FileNotFoundError()):
         with pytest.raises(RuntimeError, match="not found"):
             subprocess_util.run_external(["nope"], timeout=5)
+
+
+def test_missing_executable_is_executable_not_found_error():
+    # Tighter than the RuntimeError check above: a missing binary must surface as
+    # the dedicated ExecutableNotFoundError so callers can treat it as a fatal env
+    # misconfig (not a transient/runtime failure).
+    with patch.object(subprocess_util.subprocess, "run", side_effect=FileNotFoundError()):
+        with pytest.raises(subprocess_util.ExecutableNotFoundError):
+            subprocess_util.run_external(["nope"], timeout=5)
