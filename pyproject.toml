@@ -1,6 +1,6 @@
 [project]
 name = "agent-reflect-analyzer"
-version = "1.1.3"
+dynamic = ["version"]
 description = "Reads shipped Claude Code sessions from GCS, runs C+D hybrid LLM analysis, emits improvement issues."
 requires-python = ">=3.12,<3.14"
 license = { text = "MIT" }
@@ -33,8 +33,13 @@ dev = [
 analyzer-cli = "analyzer.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+# Version is derived from the git tag (no hardcoded version anywhere in the repo;
+# the release tag is the single source of truth).
+[tool.hatch.version]
+source = "vcs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["analyzer"]

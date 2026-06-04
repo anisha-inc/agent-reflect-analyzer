@@ -48,6 +48,10 @@ on:
         description: "1Password item path (Vault/Item) for the GitHub App used to mint issue-write tokens."
         type: string
         required: true
+      analyzer_ref:
+        description: "Git ref (tag/sha) of the analyzer package to run. Set to the same tag you pin this reusable at (uses: ...@<ref>) so the workflow and the analyzer code stay in lockstep."
+        type: string
+        required: true
     secrets:
       OP_SERVICE_ACCOUNT_TOKEN_CI:
         description: "1Password service-account token (org-level) that bootstraps op."
@@ -91,12 +95,11 @@ jobs:
           ANALYZER_SINCE: ${{ inputs.since }}
           ANALYZER_LIMIT: ${{ inputs.limit }}
           ANALYZER_REPO: ${{ inputs.repo }}
-          # Analyzer package ref — MUST equal the release tag of this reusable
-          # (self-consistent: reusable@vX runs analyzer@vX). `github.job_workflow_sha`
-          # resolves to an empty string in this context at runtime, so the tag is
-          # pinned explicitly; keep it in lockstep with the release (release.yml cuts
-          # the next semver from PR titles).
-          ANALYZER_REF: v1.1.2
+          # Analyzer package ref comes from the caller (input) — the version is
+          # NOT hardcoded here. The caller pins both this reusable (uses: ...@<ref>)
+          # and analyzer_ref to the same tag, so workflow and analyzer code stay in
+          # lockstep with zero in-repo self-reference to drift.
+          ANALYZER_REF: ${{ inputs.analyzer_ref }}
         run: |
           uvx --from "git+https://github.com/anisha-inc/agent-reflect-analyzer@${ANALYZER_REF}" analyzer-cli \
             --since "$ANALYZER_SINCE" \
