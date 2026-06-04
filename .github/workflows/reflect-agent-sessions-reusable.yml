@@ -88,10 +88,12 @@ jobs:
           ANALYZER_SINCE: ${{ inputs.since }}
           ANALYZER_LIMIT: ${{ inputs.limit }}
           ANALYZER_REPO: ${{ inputs.repo }}
-          # Pin analyzer to the exact commit of THIS reusable workflow (self-consistent
-          # across re-tags). Spawned via uvx so it runs for ANY caller repo without
-          # needing the analyzer checked out — fixes the prior `uv run` spawn failure.
-          ANALYZER_REF: ${{ github.job_workflow_sha }}
+          # Analyzer package ref — MUST equal the release tag of this reusable
+          # (self-consistent: reusable@vX runs analyzer@vX). `github.job_workflow_sha`
+          # resolves to an empty string in this context at runtime, so the tag is
+          # pinned explicitly; keep it in lockstep with the release (release.yml cuts
+          # the next semver from PR titles).
+          ANALYZER_REF: v1.1.2
         run: |
           uvx --from "git+https://github.com/anisha-inc/agent-reflect-analyzer@${ANALYZER_REF}" analyzer-cli \
             --since "$ANALYZER_SINCE" \
