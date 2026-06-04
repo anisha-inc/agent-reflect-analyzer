@@ -23,7 +23,7 @@ from tenacity import (
 )
 
 from .. import audit, config
-from ..subprocess_util import run_external
+from ..subprocess_util import ExecutableNotFoundError, run_external
 from . import prompt_loader
 from .schemas import OpusFindings
 
@@ -321,8 +321,13 @@ def _call_claude_subprocess(
                 stdin=stdin_fp,
                 check=False,
             )
+    except ExecutableNotFoundError:
+        # Missing `claude` binary = fatal env misconfiguration, not a transient
+        # Opus failure. Propagate as-is so the run fails loudly (and tenacity,
+        # which only retries OpusInvocationError, does not retry it).
+        raise
     except RuntimeError as e:
-        # run_external raises on timeout or a missing `claude` executable.
+        # run_external also raises on timeout / non-zero exit.
         raise OpusInvocationError(f"claude -p invocation failed: {e}") from e
     finally:
         prompt_file.unlink(missing_ok=True)

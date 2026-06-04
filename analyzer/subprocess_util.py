@@ -19,6 +19,15 @@ import subprocess
 from collections.abc import Sequence
 
 
+class ExecutableNotFoundError(RuntimeError):
+    """Raised when an external executable is not on PATH.
+
+    Subclasses ``RuntimeError`` so existing ``except RuntimeError`` handlers keep
+    working, but lets callers distinguish a fatal environment misconfiguration
+    (binary missing) from a transient/runtime failure that may be tolerated.
+    """
+
+
 def _argv_repr(argv: Sequence[str], redact_argv_log: bool) -> str:
     if not argv:
         return "<empty>"
@@ -71,7 +80,9 @@ def run_external(
             f"command timed out after {timeout}s: {_argv_repr(argv, redact_argv_log)}"
         ) from e
     except FileNotFoundError as e:
-        raise RuntimeError(f"executable not found: {_argv_repr(argv, redact_argv_log)}") from e
+        raise ExecutableNotFoundError(
+            f"executable not found: {_argv_repr(argv, redact_argv_log)}"
+        ) from e
     if check:
         return result.stdout
     return result

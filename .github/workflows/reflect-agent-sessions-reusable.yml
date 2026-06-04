@@ -65,6 +65,12 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6 # v6.1.0
 
+      - name: Install Claude Code CLI
+        # Opus Stage [3] shells out to `claude -p` (subscription billing via the
+        # OAuth token → $0 marginal; verified headless in CI). The CLI is not on
+        # the runner by default — install it so the analyzer's primary stage runs.
+        run: npm install -g @anthropic-ai/claude-code
+
       - name: Load secrets (op CLI + 1P-backed env)
         uses: 1password/load-secrets-action@92467eb28f72e8255933372f1e0707c567ce2259 # v4.0.0
         with:
