@@ -1,8 +1,9 @@
 """Render and create GitHub issues from Candidate objects.
 
-The skill calls `--emit-issues --repo owner/name`; this module mints a token
-(via auth.mint_github_token), renders `templates/issue_body.j2`, and shells out
-to `gh issue create --label improvement-by-agent --body-file <tmp>`.
+The skill calls `--emit-issues --repo owner/name`; this module resolves a token
+(via auth.resolve_github_token — ambient GH_TOKEN/GITHUB_TOKEN), renders
+`templates/issue_body.j2`, and shells out to
+`gh issue create --label improvement-by-agent --body-file <tmp>`.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import tempfile
 
 import jinja2
 
-from . import auth, config, util
+from . import auth, config
 from .llm.schemas import Candidate
 from .subprocess_util import run_external
 
@@ -95,11 +96,10 @@ def emit_issue(
         return None
 
     if token is None:
-        token = auth.resolve_github_token(target_org=util.parse_owner(repo))
+        token = auth.resolve_github_token()
     if token is None:
         raise RuntimeError(
-            "no GitHub token available — set GH_TOKEN/GITHUB_TOKEN, or "
-            "OP_SVC_TOKEN + GH_APP_OP_ITEM to mint an App token (PF-29)."
+            "no GitHub token available — set GH_TOKEN or GITHUB_TOKEN in the environment."
         )
 
     env = {**os.environ, "GH_TOKEN": token}

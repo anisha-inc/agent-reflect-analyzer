@@ -99,7 +99,7 @@ def test_run_pipeline_emit_issues_calls_gh():
         patch("analyzer.dedup.fetch_open_issues", return_value=[]),
         patch("analyzer.dedup.dedup_candidates", return_value=[fake_candidate]),
         patch("analyzer.redact.redact_candidate", return_value=fake_candidate),
-        patch("analyzer.auth.mint_github_token", return_value="ghs_dummy"),
+        patch("analyzer.auth.resolve_github_token", return_value="ghs_dummy"),
         patch("analyzer.issues.emit_issue", return_value="https://github.com/a/b/issues/1") as emit,
     ):
         conn.return_value.close = lambda: None

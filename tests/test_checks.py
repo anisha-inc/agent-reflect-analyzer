@@ -21,29 +21,19 @@ def test_each_probe_returns_required_fields():
         assert isinstance(r["detail"], str)
 
 
-def test_run_all_emits_8_probes():
+def test_run_all_emits_7_probes():
     results = checks.run_all()
-    assert len(results) == 8
+    assert len(results) == 7
     ids = [r["id"] for r in results]
     assert set(ids) == {
         "hmac_1p",
         "hmac_duckdb_smoke",
         "gh_cli",
-        "app_token",
         "recent_ships",
         "anthropic_key",
         "claude_cli",
         "python_deps",
     }
-
-
-def test_check_app_token_script_ok_via_bash(monkeypatch):
-    # PF-25: the probe finds the script and runs `bash <path> --help` without
-    # requiring the executable bit (force-included wheel copies aren't +x).
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
-    r = checks.check_app_token_script()
-    assert r["id"] == "app_token"
-    assert r["ok"] is True, r
 
 
 def test_recent_ships_uses_duckdb_glob_v2_layout(monkeypatch):
@@ -92,4 +82,4 @@ def test_results_are_json_serializable():
     results = checks.run_all()
     s = json.dumps(results)
     parsed = json.loads(s)
-    assert len(parsed) == 8
+    assert len(parsed) == 7

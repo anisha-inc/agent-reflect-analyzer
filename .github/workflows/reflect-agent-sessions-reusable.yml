@@ -44,10 +44,6 @@ on:
         description: "1Password reference resolving to the service-account token value (consumed by op)."
         type: string
         required: true
-      gh_app_op_item:
-        description: "1Password item path (Vault/Item) for the GitHub App used to mint issue-write tokens."
-        type: string
-        required: true
       analyzer_ref:
         description: "Git ref (tag/sha) of the analyzer package to run. Set to the same tag you pin this reusable at (uses: ...@<ref>) so the workflow and the analyzer code stay in lockstep."
         type: string
@@ -86,7 +82,6 @@ jobs:
           # interpolated into the run: block) to harden against shell injection
           # if a caller ever becomes untrusted.
           GH_TOKEN: ${{ github.token }}
-          GH_APP_OP_ITEM: ${{ inputs.gh_app_op_item }}
           AGENT_REFLECT_GCS_BUCKET: ${{ inputs.gcs_bucket }}
           AGENT_REFLECT_HMAC_AKID_REF: ${{ inputs.hmac_akid_ref }}
           AGENT_REFLECT_HMAC_SECRET_REF: ${{ inputs.hmac_secret_ref }}

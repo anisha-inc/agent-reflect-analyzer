@@ -1,7 +1,7 @@
 """SemHash-based candidate dedup against open `improvement-by-agent` GitHub issues.
 
-Existing issues are fetched via `gh issue list` (uses GH_TOKEN from auth.mint
-helper or ambient gh auth). SemHash uses sentence-transformers embeddings +
+Existing issues are fetched via `gh issue list` (uses the ambient
+GH_TOKEN/GITHUB_TOKEN). SemHash uses sentence-transformers embeddings +
 nearest-neighbour search to detect candidates that are semantically close to
 already-open patterns.
 """
@@ -38,14 +38,14 @@ def fetch_open_issues(
     Closed issues from N days ago are appended when `include_closed_since` is
     set (e.g. "30d") so that recently-resolved patterns aren't re-emitted.
 
-    When no token is supplied, prefer the caller's ambient `GH_TOKEN`/
-    `GITHUB_TOKEN` and only mint an org-scoped App token as a fallback (PF-29) —
-    so server-side cross-org dedup uses the caller repo's own `github.token`.
+    When no token is supplied, the caller's ambient `GH_TOKEN`/`GITHUB_TOKEN`
+    is used — so server-side cross-org dedup uses the caller repo's own
+    `github.token`.
     """
     if token is None:
-        from . import auth, util
+        from . import auth
 
-        token = auth.resolve_github_token(target_org=util.parse_owner(repo))
+        token = auth.resolve_github_token()
 
     env = {**os.environ}
     if token:

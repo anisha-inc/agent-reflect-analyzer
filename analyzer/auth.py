@@ -1,17 +1,14 @@
-"""Mint a GitHub installation token via the vendored github-app-token script.
+"""GitHub token resolution + 1Password secret reads for the analyzer.
 
-The vendored script (``scripts/github-app-token``) prints the token to stdout.
-Per-repo / per-permission scoping is NOT available in the upstream script — the
-token follows the GitHub App's configured permissions (issues:write).
-
-If ``OP_SVC_TOKEN`` isn't in the environment, ``mint_github_token``
-raises — the caller catches it and surfaces an actionable message.
+The GitHub token comes from the ambient environment (``GH_TOKEN``/``GITHUB_TOKEN``)
+— set by the caller's CI workflow (``github.token``) or the developer's shell.
+1P reads (``_op_read``) cover the Anthropic API key and the ``claude -p`` OAuth
+token, gated on ``OP_SVC_TOKEN``.
 """
 
 from __future__ import annotations
 
 import os
-import pathlib
 
 from pydantic import ValidationError
 
@@ -69,62 +66,11 @@ def read_anthropic_api_key(settings: Settings | None = None) -> str | None:
     return _op_read(settings.anthropic_key_ref)
 
 
-def _script_path() -> pathlib.Path:
-    """Return the path to the vendored github-app-token script.
+def resolve_github_token() -> str | None:
+    """Resolve a GitHub token from the ambient environment.
 
-    Resolution order (first existing wins):
-      1. ``$CLAUDE_PLUGIN_ROOT/scripts/github-app-token`` — plugin install.
-      2. ``analyzer/scripts/github-app-token`` next to this file — bundled into
-         the wheel via force-include (PF-25), the uvx / installed path.
-      3. ``scripts/github-app-token`` at repo root — source checkout.
-    Falls back to (3) so the "not found" error points at the source layout.
+    Returns the caller's ``GH_TOKEN``/``GITHUB_TOKEN``, or None if neither is set.
+    The reusable workflow exports ``github.token``; locally it's the developer's
+    ``gh auth`` token. No App minting — issues are authored by whoever owns the token.
     """
-    here = pathlib.Path(__file__).resolve()
-    candidates: list[pathlib.Path] = []
-    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
-    if plugin_root:
-        candidates.append(pathlib.Path(plugin_root) / "scripts" / "github-app-token")
-    candidates.append(here.parent / "scripts" / "github-app-token")  # packaged wheel
-    candidates.append(here.parent.parent / "scripts" / "github-app-token")  # source checkout
-    for c in candidates:
-        if c.exists():
-            return c
-    return candidates[-1]
-
-
-def resolve_github_token(*, target_org: str) -> str | None:
-    """Resolve a GitHub token, preferring a caller-provided ambient token over
-    minting an org-scoped App token (PF-29).
-
-    Server-side, the reusable workflow exports the caller repo's own
-    ``GH_TOKEN``/``GITHUB_TOKEN`` (``github.token``) — which can read/write that
-    org's private repos. Minting the analyzer's own App token first would shadow
-    that correct token and break cross-org dedup/emit (the App isn't installed
-    on the caller org). So: ambient token wins; mint only as a fallback when no
-    ambient token is present. Returns None when neither source is available.
-    """
-    ambient = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
-    if ambient:
-        return ambient
-    try:
-        return mint_github_token(target_org=target_org)
-    except RuntimeError:
-        return None
-
-
-def mint_github_token(*, target_org: str, timeout_s: int = 30) -> str:
-    """Return an installation token for ``target_org``. Raises on failure."""
-    if "OP_SVC_TOKEN" not in os.environ:
-        raise RuntimeError("OP_SVC_TOKEN not in env — cannot mint GitHub App token.")
-    script = _script_path()
-    if not script.exists():
-        raise RuntimeError(f"vendored github-app-token not found at {script}")
-    env = {**os.environ, "GH_APP_TARGET_ORG": target_org}
-    try:
-        # Invoke via `bash` — the wheel-bundled copy isn't marked executable.
-        out = run_external(["bash", str(script)], timeout=timeout_s, env=env).strip()
-    except RuntimeError as e:
-        raise RuntimeError(f"github-app-token failed: {e}") from e
-    if not out:
-        raise RuntimeError("github-app-token returned empty stdout.")
-    return out
+    return os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
