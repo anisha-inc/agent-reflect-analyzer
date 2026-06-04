@@ -30,6 +30,7 @@ dropping them — then ship a new semver release (`v1.0.1`+).
 - [x] Step 5: PF-27 — chunk large sessions instead of dropping (fair-share) ✓ `3adbe77`
 - [x] Step 6: version bump 1.1.0 + README docs (org-scoping, fail-closed, packaging) ✓ `4e3e7c4` (+`uv.lock` sync)
 - [x] Step 7: create PR → https://github.com/anisha-inc/agent-reflect-analyzer/pull/2
+- [x] Step 8 (follow-up patch → v1.1.1): reusable workflow spawns the analyzer via `uvx --from git+…@${{ github.job_workflow_sha }}` instead of `uv run`. `uv run` resolved `analyzer-cli` from the CALLER repo's checkout (no package there) → "Failed to spawn: analyzer-cli". Surfaced by the scheduled dogfood run from the paired plugins shim (startup + load-secrets OK, failed at Run analyzer). Dropped the now-unneeded caller checkout.
 
 ## Decisions
 

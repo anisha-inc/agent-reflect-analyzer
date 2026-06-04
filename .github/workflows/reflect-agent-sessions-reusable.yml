@@ -62,16 +62,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
       - name: Setup uv
         uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6 # v6.1.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
 
       - name: Load secrets (op CLI + 1P-backed env)
         uses: 1password/load-secrets-action@92467eb28f72e8255933372f1e0707c567ce2259 # v4.0.0
@@ -96,8 +88,12 @@ jobs:
           ANALYZER_SINCE: ${{ inputs.since }}
           ANALYZER_LIMIT: ${{ inputs.limit }}
           ANALYZER_REPO: ${{ inputs.repo }}
+          # Pin analyzer to the exact commit of THIS reusable workflow (self-consistent
+          # across re-tags). Spawned via uvx so it runs for ANY caller repo without
+          # needing the analyzer checked out — fixes the prior `uv run` spawn failure.
+          ANALYZER_REF: ${{ github.job_workflow_sha }}
         run: |
-          uv run analyzer-cli \
+          uvx --from "git+https://github.com/anisha-inc/agent-reflect-analyzer@${ANALYZER_REF}" analyzer-cli \
             --since "$ANALYZER_SINCE" \
             --limit "$ANALYZER_LIMIT" \
             --repo "$ANALYZER_REPO" \
