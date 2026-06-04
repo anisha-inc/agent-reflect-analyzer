@@ -95,32 +95,6 @@ def check_gh_cli() -> CheckResult:
         )
 
 
-def check_app_token_script() -> CheckResult:
-    # Resolution order mirrors auth._script_path: plugin → packaged wheel →
-    # source checkout. The wheel-bundled copy (PF-25) isn't marked executable,
-    # so we don't require os.X_OK and invoke via `bash <path>`.
-    here = os.path.dirname(os.path.abspath(__file__))
-    candidates: list[str] = []
-    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
-    if plugin_root:
-        candidates.append(os.path.join(plugin_root, "scripts", "github-app-token"))
-    candidates.append(os.path.join(here, "scripts", "github-app-token"))  # packaged wheel
-    candidates.append(os.path.join(here, "..", "scripts", "github-app-token"))  # source checkout
-    path = next((p for p in candidates if os.path.isfile(p)), None)
-    if path is None:
-        return _result(
-            "app_token",
-            "auth",
-            False,
-            f"github-app-token script not found (looked in {candidates[-1]} and siblings).",
-        )
-    try:
-        run_external(["bash", path, "--help"], timeout=5, env={**os.environ})
-        return _result("app_token", "auth", True, "github-app-token --help OK.")
-    except RuntimeError as e:
-        return _result("app_token", "auth", False, f"--help failed: {str(e)[:80]}")
-
-
 def check_recent_ships() -> CheckResult:
     """Liveness probe for shipped sessions via the SAME DuckDB/HMAC path as real
     ingestion (PF-26).
@@ -324,7 +298,6 @@ PROBES = [
     check_hmac_1p,
     check_hmac_duckdb_smoke,
     check_gh_cli,
-    check_app_token_script,
     check_recent_ships,
     check_anthropic_key,
     check_claude_cli,

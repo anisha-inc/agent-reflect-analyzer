@@ -24,7 +24,6 @@ jobs:
       anthropic_key_ref: op://Vault/anthropic/ANTHROPIC_API_KEY
       oauth_token_ref: op://Vault/anthropic/CLAUDE_CODE_OAUTH_TOKEN
       op_svc_token_vault_ref: op://Vault/service-account/token
-      gh_app_op_item: Vault/GitHub App
 ```
 
 Pin to a specific tag (e.g. `@v1.1.0`). No floating `@v1` — every consumer pins
@@ -46,9 +45,8 @@ explicitly.
 | `AGENT_REFLECT_ANTHROPIC_KEY_REF` | yes | 1Password reference for the Anthropic API key. |
 | `AGENT_REFLECT_OAUTH_TOKEN_REF` | yes | 1Password reference(s), comma-separated, for the `claude -p` OAuth token. |
 | `AGENT_REFLECT_TARGET_ORG_DEFAULT` | no | Default org for `--repo` inference **and** the read-scope owner when `--repo` is omitted (see Tenant isolation). |
-| `GH_TOKEN` / `GITHUB_TOKEN` | for issue emit (server-side) | Caller's GitHub token (e.g. `${{ github.token }}`). Preferred over minting an App token for dedup/emit, so cross-org runs use the caller repo's own identity. |
+| `GH_TOKEN` / `GITHUB_TOKEN` | for issue emit | Caller's GitHub token (e.g. `${{ github.token }}`) used for dedup/emit — issues are authored by whoever owns the token. |
 | `OP_SVC_TOKEN` | yes | 1Password service-account token value (consumed by the `op` CLI). |
-| `GH_APP_OP_ITEM` | for issue emit (fallback) | 1Password item path (`Vault/Item`) for the GitHub App used to mint issue-write tokens when no ambient `GH_TOKEN`/`GITHUB_TOKEN` is present. |
 
 ## Tenant isolation
 
@@ -59,13 +57,9 @@ omitted). With **neither** set, the run **fails closed** rather than reading
 every organization's sessions. The owner is validated against the GitHub-org
 charset before it reaches the read query.
 
-Issue dedup/emit prefer the caller's ambient `GH_TOKEN`/`GITHUB_TOKEN` and only
-mint an org-scoped GitHub App token as a fallback — so a server-side run in
-another org uses that org's own `github.token` instead of an identity that
-cannot see its private repos.
-
-The vendored `scripts/github-app-token` minter is bundled into the wheel, so
-issue emit works on the `uvx` path (not just source checkouts).
+Issue dedup/emit use the caller's ambient `GH_TOKEN`/`GITHUB_TOKEN` — so a
+server-side run in another org uses that org's own `github.token`, which can see
+its private repos. No App minting; issues are authored by whoever owns the token.
 
 ## License
 
