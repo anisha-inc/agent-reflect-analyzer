@@ -62,9 +62,9 @@ is `github-actions[bot]` and GitHub's anti-recursion guard suppresses downstream
 
 ## Next Action
 
-Open the PR; CI expected green (py-tests 118, ruff, actionlint). Coordinate the
-lockstep release: merge this PR, then tag + `gh release create v1.2.0`, then the
-paired plugins PR (shim/template re-pin to `@v1.2.0` + new `workflow_run` Slack
-workflow) can merge.
+PR merged, `v1.2.0` released, paired plugins PR open. Follow-up (this branch):
+comment-quality trim — `resolve_github_token` docstring пересказывал тело +
+дублировал module-docstring; заменён на one-line `#`-why (no App minting →
+issue author = ambient-token owner). Comment-only, версия от git-тега — bump не нужен.
 
 ## Follow-ups

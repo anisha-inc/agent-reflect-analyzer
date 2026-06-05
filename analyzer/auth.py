@@ -67,10 +67,6 @@ def read_anthropic_api_key(settings: Settings | None = None) -> str | None:
 
 
 def resolve_github_token() -> str | None:
-    """Resolve a GitHub token from the ambient environment.
-
-    Returns the caller's ``GH_TOKEN``/``GITHUB_TOKEN``, or None if neither is set.
-    The reusable workflow exports ``github.token``; locally it's the developer's
-    ``gh auth`` token. No App minting — issues are authored by whoever owns the token.
-    """
+    # No App minting: the GitHub identity is whoever owns the ambient token
+    # (CI → github-actions[bot]; locally → the dev's gh auth token).
     return os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
