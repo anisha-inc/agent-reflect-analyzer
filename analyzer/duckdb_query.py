@@ -9,7 +9,7 @@ for ordering, applies `/reflect-agent-sessions` self-pollution filter from
 PRD §C3). `load_events_for_sessions()` returns all events grouped by sessionId
 for the LLM stages.
 
-Functions are designed to gracefully degrade: when DuckDB / 1P / httpfs are
+Functions are designed to gracefully degrade: when DuckDB / httpfs / creds are
 absent (CI lane, no creds in env), import-time guards keep the module loadable
 so unit tests can mock the connection.
 """
@@ -17,14 +17,12 @@ so unit tests can mock the connection.
 from __future__ import annotations
 
 import json
-import os
 import re
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import config
-from .subprocess_util import run_external
 
 _DURATION_RE = re.compile(r"^(?P<num>\d+)\s*(?P<unit>[dhmw]?)$")
 
@@ -45,30 +43,19 @@ def parse_duration(since: str) -> datetime:
     return datetime.now(timezone.utc) - delta
 
 
-def _op_read(ref: str) -> str:
-    """Read a 1P secret reference. Raises if OP_SVC_TOKEN missing."""
-    token = os.environ.get("OP_SVC_TOKEN")
-    if not token:
-        raise RuntimeError("OP_SVC_TOKEN not set — cannot read 1P secret.")
-    env = {**os.environ, "OP_SERVICE_ACCOUNT_TOKEN": token}
-    out = run_external(["op", "read", ref], timeout=10, env=env, redact_argv_log=True).strip()
-    if not out:
-        raise RuntimeError(f"op read {ref} returned empty string.")
-    return out
-
-
 def connect():
-    """Open a DuckDB in-memory connection with httpfs + GCS HMAC secret loaded."""
+    """Open a DuckDB in-memory connection with httpfs + GCS HMAC secret loaded.
+
+    The HMAC pair is a resolved value from the env (``Settings``), not a 1P ref.
+    """
     import duckdb  # local: keep top-level import optional for unit tests
 
     settings = config.load_settings()
-    key_id = _op_read(settings.hmac_akid_ref)
-    secret = _op_read(settings.hmac_secret_ref)
     con = duckdb.connect(":memory:")
     con.execute("INSTALL httpfs; LOAD httpfs;")
     con.execute(
         "CREATE OR REPLACE SECRET (TYPE gcs, KEY_ID ?, SECRET ?);",
-        [key_id, secret],
+        [settings.hmac_akid, settings.hmac_secret],
     )
     return con
 

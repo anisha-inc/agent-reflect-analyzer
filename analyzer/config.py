@@ -14,14 +14,18 @@ from __future__ import annotations
 
 import os
 import pathlib
-from typing import Annotated
 
-from pydantic import AliasChoices, Field, field_validator
-from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Strict environment configuration. No defaults for secret-bearing fields."""
+    """Strict environment configuration. No defaults for secret-bearing fields.
+
+    Every field holds a *resolved value* read straight from an ``AGENT_REFLECT_*``
+    env var — the analyzer never reaches out to 1Password. Secret resolution
+    (``op read`` / ``load-secrets-action``) happens outside, in the caller's CI
+    workflow or the developer's credential-sync step.
+    """
 
     model_config = SettingsConfigDict(
         env_prefix="AGENT_REFLECT_",
@@ -32,36 +36,12 @@ class Settings(BaseSettings):
 
     # Full bucket URL, e.g. ``gs://my-bucket``. → AGENT_REFLECT_GCS_BUCKET
     gcs_bucket: str
-    # 1Password reference for the GCS HMAC access key id. → AGENT_REFLECT_HMAC_AKID_REF
-    hmac_akid_ref: str
-    # 1Password reference for the GCS HMAC secret. → AGENT_REFLECT_HMAC_SECRET_REF
-    hmac_secret_ref: str
-    # 1Password reference for the Anthropic API key. → AGENT_REFLECT_ANTHROPIC_KEY_REF
-    anthropic_key_ref: str
-    # Comma-separated 1Password references for the ``claude -p`` OAuth token.
-    # → AGENT_REFLECT_OAUTH_TOKEN_REF (singular env var, list-valued field).
-    oauth_token_refs: Annotated[list[str], NoDecode] = Field(
-        validation_alias=AliasChoices("AGENT_REFLECT_OAUTH_TOKEN_REF", "oauth_token_refs"),
-    )
+    # Resolved GCS HMAC access key id (a value, not a 1P ref). → AGENT_REFLECT_HMAC_AKID
+    hmac_akid: str
+    # Resolved GCS HMAC secret (a value, not a 1P ref). → AGENT_REFLECT_HMAC_SECRET
+    hmac_secret: str
     # Optional default org for ``--repo`` inference. → AGENT_REFLECT_TARGET_ORG_DEFAULT
     target_org_default: str | None = None
-
-    @field_validator("oauth_token_refs", mode="before")
-    @classmethod
-    def _split_oauth_refs(cls, v: object) -> object:
-        """Split the comma-separated env value; an empty string is invalid.
-
-        Defense-in-depth interface contract: an explicitly empty
-        ``AGENT_REFLECT_OAUTH_TOKEN_REF`` must raise, not silently yield ``[]``.
-        """
-        if isinstance(v, str):
-            parts = [p.strip() for p in v.split(",") if p.strip()]
-            if not parts:
-                raise ValueError(
-                    "AGENT_REFLECT_OAUTH_TOKEN_REF must list at least one 1Password reference"
-                )
-            return parts
-        return v
 
 
 def load_settings() -> Settings:
