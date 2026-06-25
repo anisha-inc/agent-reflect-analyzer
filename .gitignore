@@ -10,3 +10,5 @@ dist/
 # Private scrub pattern list — never commit to this public repo (sourced from a
 # GitHub Actions variable in CI, or a local copy here for pre-commit).
 .security/forbidden-patterns.txt
+# Claude Code local worktrees — never commit
+.claude/worktrees/

@@ -41,8 +41,8 @@ def test_recent_ships_uses_duckdb_glob_v2_layout(monkeypatch):
     # dev= partition under the v=2 layout.
     class _S:
         gcs_bucket = "gs://b"
-        hmac_akid_ref = "op://a"
-        hmac_secret_ref = "op://s"
+        hmac_akid = "x" * 60
+        hmac_secret = "y" * 60
 
     captured: dict = {}
 
@@ -61,7 +61,6 @@ def test_recent_ships_uses_duckdb_glob_v2_layout(monkeypatch):
     fake_duckdb = type("M", (), {"connect": staticmethod(lambda *a, **k: _Con())})()
     monkeypatch.setitem(sys.modules, "duckdb", fake_duckdb)
     monkeypatch.setattr(checks, "_load_settings", lambda: _S())
-    monkeypatch.setattr(checks, "_op_read", lambda ref: "x" * 60)
     monkeypatch.setattr(identity, "dev_id", lambda: "abc123")
 
     r = checks.check_recent_ships()

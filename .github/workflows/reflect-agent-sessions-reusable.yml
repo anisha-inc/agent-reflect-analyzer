@@ -1,9 +1,10 @@
 name: Reflect agent sessions (reusable)
 
 # Reusable workflow for scheduled agent reflection. Consumers pin a tag, e.g.
-#   uses: anisha-inc/agent-reflect-analyzer/.github/workflows/reflect-agent-sessions-reusable.yml@v1.0.0
+#   uses: anisha-inc/agent-reflect-analyzer/.github/workflows/reflect-agent-sessions-reusable.yml@v1.3.0
 # All 1Password references and the target repo are passed in by the caller — no
-# environment-specific values are baked in here.
+# environment-specific values are baked in here. The op:// refs are resolved to
+# plain values by load-secrets here; the analyzer only reads resolved env vars.
 
 on:
   workflow_call:
@@ -37,11 +38,11 @@ on:
         type: string
         required: true
       oauth_token_ref:
-        description: "1Password reference(s), comma-separated, for the claude -p OAuth token."
+        description: "1Password reference for the claude -p OAuth token."
         type: string
         required: true
       op_svc_token_vault_ref:
-        description: "1Password reference resolving to the service-account token value (consumed by op)."
+        description: "1Password reference resolving to the service-account token value with access to the secret vault."
         type: string
         required: true
       analyzer_ref:
@@ -68,13 +69,28 @@ jobs:
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
 
-      - name: Load secrets (op CLI + 1P-backed env)
+      # Hop 1: the org-level CI token resolves the service-account token value
+      # that has access to the secret vault.
+      - name: Resolve service-account token
         uses: 1password/load-secrets-action@92467eb28f72e8255933372f1e0707c567ce2259 # v4.0.0
         with:
           export-env: true
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN_CI }}
           OP_SVC_TOKEN: ${{ inputs.op_svc_token_vault_ref }}
+
+      # Hop 2: that token resolves the op:// refs into plain values, exported as
+      # the env vars the analyzer reads directly. The analyzer never calls `op`.
+      - name: Resolve analyzer secrets
+        uses: 1password/load-secrets-action@92467eb28f72e8255933372f1e0707c567ce2259 # v4.0.0
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ env.OP_SVC_TOKEN }}
+          AGENT_REFLECT_HMAC_AKID: ${{ inputs.hmac_akid_ref }}
+          AGENT_REFLECT_HMAC_SECRET: ${{ inputs.hmac_secret_ref }}
+          ANTHROPIC_API_KEY: ${{ inputs.anthropic_key_ref }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.oauth_token_ref }}
 
       - name: Run analyzer
         env:
@@ -83,10 +99,6 @@ jobs:
           # if a caller ever becomes untrusted.
           GH_TOKEN: ${{ github.token }}
           AGENT_REFLECT_GCS_BUCKET: ${{ inputs.gcs_bucket }}
-          AGENT_REFLECT_HMAC_AKID_REF: ${{ inputs.hmac_akid_ref }}
-          AGENT_REFLECT_HMAC_SECRET_REF: ${{ inputs.hmac_secret_ref }}
-          AGENT_REFLECT_ANTHROPIC_KEY_REF: ${{ inputs.anthropic_key_ref }}
-          AGENT_REFLECT_OAUTH_TOKEN_REF: ${{ inputs.oauth_token_ref }}
           ANALYZER_SINCE: ${{ inputs.since }}
           ANALYZER_LIMIT: ${{ inputs.limit }}
           ANALYZER_REPO: ${{ inputs.repo }}

@@ -33,12 +33,14 @@ def _isolated_audit_dir(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def _default_settings_env(monkeypatch):
     """Supply dummy AGENT_REFLECT_* config so ``config.load_settings()`` succeeds
-    in tests. Tests that exercise the missing/invalid-config path clear or
-    override these explicitly via their own ``monkeypatch``."""
+    in tests. Values are resolved secrets (not 1P refs) — the analyzer reads them
+    straight from env. Tests exercising the missing/invalid-config path clear or
+    override these via their own ``monkeypatch``."""
     monkeypatch.setenv("AGENT_REFLECT_GCS_BUCKET", "gs://test-bucket")
-    monkeypatch.setenv("AGENT_REFLECT_HMAC_AKID_REF", "op://TEST/hmac/akid")
-    monkeypatch.setenv("AGENT_REFLECT_HMAC_SECRET_REF", "op://TEST/hmac/secret")
-    monkeypatch.setenv("AGENT_REFLECT_ANTHROPIC_KEY_REF", "op://TEST/anthropic/key")
-    monkeypatch.setenv("AGENT_REFLECT_OAUTH_TOKEN_REF", "op://TEST/oauth/token")
+    monkeypatch.setenv("AGENT_REFLECT_HMAC_AKID", "x" * 60)
+    monkeypatch.setenv("AGENT_REFLECT_HMAC_SECRET", "y" * 60)
     monkeypatch.delenv("AGENT_REFLECT_TARGET_ORG_DEFAULT", raising=False)
+    # Native LLM creds are read directly from env; keep them deterministic.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
     yield

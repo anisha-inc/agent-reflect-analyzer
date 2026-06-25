@@ -5,8 +5,10 @@ runs all checks, prints a JSON array, and exits non-zero if any check failed
 (unless --json is set, in which case it always exits 0 so the skill can parse
 the result and present an actionable message).
 
-Categories: env (binaries / env vars), secrets (1P), auth (network identity),
-data (recent ships in bucket).
+Categories: env (binaries / env vars), secrets (resolved values from env),
+auth (network identity), data (recent ships in bucket). Secret resolution
+(1Password / load-secrets) happens outside the analyzer — these probes only
+read already-resolved env values.
 """
 
 from __future__ import annotations
@@ -43,32 +45,18 @@ def _load_settings() -> Settings | None:
         return None
 
 
-def _op_read(ref: str) -> str | None:
-    token = os.environ.get("OP_SVC_TOKEN")
-    if not token:
-        return None
-    env = {**os.environ, "OP_SERVICE_ACCOUNT_TOKEN": token}
-    try:
-        out = run_external(["op", "read", ref], timeout=10, env=env, redact_argv_log=True).strip()
-        return out or None
-    except RuntimeError:
-        return None
-
-
 def check_hmac_1p() -> CheckResult:
     settings = _load_settings()
     if settings is None:
         return _result("hmac_1p", "secrets", False, _CONFIG_MISSING_DETAIL)
-    val = _op_read(settings.hmac_akid_ref)
-    if val is None:
+    val = settings.hmac_akid
+    if not val:
         return _result(
             "hmac_1p",
             "secrets",
             False,
-            "1P reference not readable. Set OP_SVC_TOKEN in env to a "
-            "1Password service-account token, then restart the Claude session so "
-            "the SessionStart hook picks it up. If `op read` itself fails, the "
-            "service account lacks access to the referenced vault.",
+            "AGENT_REFLECT_HMAC_AKID is empty — set it to the resolved GCS HMAC "
+            "access key id (credential resolution happens outside the analyzer).",
         )
     if len(val) < 30:
         return _result(
@@ -112,14 +100,14 @@ def check_recent_ships() -> CheckResult:
     settings = _load_settings()
     if settings is None:
         return _result("recent_ships", "data", False, _CONFIG_MISSING_DETAIL)
-    key_id = _op_read(settings.hmac_akid_ref)
-    secret = _op_read(settings.hmac_secret_ref)
+    key_id = settings.hmac_akid
+    secret = settings.hmac_secret
     if not key_id or not secret:
         return _result(
             "recent_ships",
             "data",
             False,
-            "HMAC pair unavailable from 1P (covered by hmac_1p probe).",
+            "HMAC pair empty in env (covered by hmac_1p probe).",
         )
     try:
         dev = identity.dev_id()
@@ -158,26 +146,12 @@ def check_recent_ships() -> CheckResult:
 def check_anthropic_key() -> CheckResult:
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
-        settings = _load_settings()
-        if settings is None:
-            return _result("anthropic_key", "secrets", False, _CONFIG_MISSING_DETAIL)
-        # Try fallback from 1P. Skill auto-bootstraps env using the same ref.
-        key = _op_read(settings.anthropic_key_ref)
-        if key:
-            os.environ["ANTHROPIC_API_KEY"] = key
-            return _result(
-                "anthropic_key",
-                "secrets",
-                True,
-                "ANTHROPIC_API_KEY loaded from 1P via AGENT_REFLECT_ANTHROPIC_KEY_REF.",
-            )
         return _result(
             "anthropic_key",
             "secrets",
             False,
-            "ANTHROPIC_API_KEY env not set and 1P fallback unavailable. Usually "
-            "caused by a missing OP_SVC_TOKEN (see hmac_1p detail) — fix "
-            "that first and this probe auto-recovers via the 1P fallback.",
+            "ANTHROPIC_API_KEY not set — provide it in the environment "
+            "(credential resolution happens outside the analyzer).",
         )
     if len(key) < 20:
         return _result("anthropic_key", "secrets", False, "ANTHROPIC_API_KEY suspiciously short.")
@@ -213,25 +187,6 @@ _PY_DEPS = [
 ]
 
 
-def bootstrap_anthropic_key() -> bool:
-    """Ensure os.environ['ANTHROPIC_API_KEY'] is set, loading from 1P if needed.
-
-    Called at the start of pipeline runs (not just --check), so AsyncAnthropic()
-    finds a key when constructed later. Returns True if key is present (env or
-    successfully bootstrapped from 1P), False otherwise.
-    """
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return True
-    settings = _load_settings()
-    if settings is None:
-        return False
-    val = _op_read(settings.anthropic_key_ref)
-    if val:
-        os.environ["ANTHROPIC_API_KEY"] = val
-        return True
-    return False
-
-
 def check_python_deps() -> CheckResult:
     # `mod` comes only from the static _PY_DEPS list above — not user input.
     missing: list[str] = []
@@ -254,8 +209,8 @@ def check_python_deps() -> CheckResult:
 def check_hmac_duckdb_smoke() -> CheckResult:
     """End-to-end: open DuckDB connection through HMAC and list 1 object.
 
-    Skips silently if duckdb or 1P aren't ready; those failures are surfaced by
-    other probes.
+    Skips silently if duckdb or creds aren't ready; those failures are surfaced
+    by other probes.
     """
     try:
         import duckdb  # noqa: F401
@@ -264,14 +219,14 @@ def check_hmac_duckdb_smoke() -> CheckResult:
     settings = _load_settings()
     if settings is None:
         return _result("hmac_duckdb_smoke", "data", False, _CONFIG_MISSING_DETAIL)
-    key_id = _op_read(settings.hmac_akid_ref)
-    secret = _op_read(settings.hmac_secret_ref)
+    key_id = settings.hmac_akid
+    secret = settings.hmac_secret
     if not key_id or not secret:
         return _result(
             "hmac_duckdb_smoke",
             "data",
             False,
-            "HMAC pair unavailable from 1P (covered by hmac_1p probe).",
+            "HMAC pair empty in env (covered by hmac_1p probe).",
         )
     try:
         import duckdb

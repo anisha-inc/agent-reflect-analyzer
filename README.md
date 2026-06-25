@@ -13,7 +13,7 @@ across organizations.
 ```yaml
 jobs:
   reflect:
-    uses: anisha-inc/agent-reflect-analyzer/.github/workflows/reflect-agent-sessions-reusable.yml@v1.1.0
+    uses: anisha-inc/agent-reflect-analyzer/.github/workflows/reflect-agent-sessions-reusable.yml@v1.3.0
     secrets:
       OP_SERVICE_ACCOUNT_TOKEN_CI: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN_CI }}
     with:
@@ -26,27 +26,36 @@ jobs:
       op_svc_token_vault_ref: op://Vault/service-account/token
 ```
 
-Pin to a specific tag (e.g. `@v1.1.0`). No floating `@v1` — every consumer pins
+The caller still passes 1Password `op://` references; the reusable workflow
+resolves them to plain values via `load-secrets-action` and hands the analyzer
+only resolved env vars (the analyzer itself never calls `op`).
+
+Pin to a specific tag (e.g. `@v1.3.0`). No floating `@v1` — every consumer pins
 explicitly.
 
-> **Release ordering (v1.1.0):** the reader now scopes ingestion to the
-> `v=2/org=<owner>` bucket layout (see below) and no longer reads the legacy
-> un-partitioned `raw/dev=*/proj=*` data. It must be released **in lockstep**
-> with the matching writer (`ship.sh` `v=2` layout) so newly shipped sessions
-> land where the analyzer reads them; consumers re-pin to `@v1.1.0` together.
+> **Release ordering (v1.3.0):** the analyzer is now a pure env-consumer — it
+> reads resolved secret **values** (`AGENT_REFLECT_HMAC_AKID/_SECRET`,
+> `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`) and no longer calls `op`.
+> The writer (`ship.sh`) consumes the matching contract; re-pin together.
+> (Read scoping to the `v=2/org=<owner>` layout — see Tenant isolation — landed
+> in v1.1.0 and is unchanged here.)
 
 ## CLI environment variables
+
+The analyzer reads **already-resolved values** from the environment — it never
+calls `op`. Resolving 1Password references into these vars happens outside: the
+reusable workflow does it via `load-secrets-action`; locally a credential-sync
+step / direnv populates them.
 
 | Env var | Required | Description |
 |---|---|---|
 | `AGENT_REFLECT_GCS_BUCKET` | yes | Full bucket URL (`gs://...`). |
-| `AGENT_REFLECT_HMAC_AKID_REF` | yes | 1Password reference for the GCS HMAC access key id. |
-| `AGENT_REFLECT_HMAC_SECRET_REF` | yes | 1Password reference for the GCS HMAC secret. |
-| `AGENT_REFLECT_ANTHROPIC_KEY_REF` | yes | 1Password reference for the Anthropic API key. |
-| `AGENT_REFLECT_OAUTH_TOKEN_REF` | yes | 1Password reference(s), comma-separated, for the `claude -p` OAuth token. |
+| `AGENT_REFLECT_HMAC_AKID` | yes | Resolved GCS HMAC access key id (a value). |
+| `AGENT_REFLECT_HMAC_SECRET` | yes | Resolved GCS HMAC secret (a value). |
+| `ANTHROPIC_API_KEY` | for Haiku stages | Anthropic API key (a value). |
+| `CLAUDE_CODE_OAUTH_TOKEN` | for Opus stage | Claude Code subscription OAuth token for `claude -p` (a value). |
 | `AGENT_REFLECT_TARGET_ORG_DEFAULT` | no | Default org for `--repo` inference **and** the read-scope owner when `--repo` is omitted (see Tenant isolation). |
 | `GH_TOKEN` / `GITHUB_TOKEN` | for issue emit | Caller's GitHub token (e.g. `${{ github.token }}`) used for dedup/emit — issues are authored by whoever owns the token. |
-| `OP_SVC_TOKEN` | yes | 1Password service-account token value (consumed by the `op` CLI). |
 
 ## Tenant isolation
 
